@@ -1,6 +1,6 @@
 """LLM report generation: COMBINED_FEATURE → OUTPUT JSON, with token/cost accounting and a spending cap.
 
-Prompt = the frozen kit prompt (reporting/REPORT_WRITER_PROMPT.md) as system message + output schema + evidence
+Prompt = the kit prompt (reporting/REPORT_WRITER_PROMPT.md) as system message + output schema + evidence
 bundle (indented JSON) as user message — the same prompt that was validated in the model benchmark.
 The model is chosen by config id from models/configs.json (provider, model id, prices); default REPORT_MODEL.
 """
@@ -11,9 +11,14 @@ import os
 from datetime import datetime, timezone
 
 from models.base import BudgetExceeded, estimate_tokens, get_adapter, load_configs
+from models.openai_compat import resolve_endpoint
 from src.report import contracts
 
-DEFAULT_MODEL = os.environ.get("REPORT_MODEL", "claude_opus55")
+DEFAULT_MODEL = os.environ.get("REPORT_MODEL") or (
+    "openrouter_gemini35flash"
+    if not os.environ.get("ANTHROPIC_API_KEY") and resolve_endpoint("openrouter")[0]
+    else "claude_opus55"
+)
 DEFAULT_MAX_USD = float(os.environ.get("REPORT_MAX_USD", "1.00"))   # hard cap per report (all calls)
 PRICING_SOURCE = "models/configs.json (prices copied from models/catalog.json, verified 2026-11-21)"
 

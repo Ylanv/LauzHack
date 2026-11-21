@@ -1,12 +1,10 @@
 import { useEffect, useRef } from "react"
 import type { RequestInput } from "../pipeline/types"
-import { DEMO_INDUSTRIES } from "../pipeline/mock"
 
 /** Confirmation only: no reference number (the backend gives none) and nothing of the underwriting document. */
-export default function DoneScreen({ input, onAgain }: { input: RequestInput; onAgain: () => void }) {
+export default function DoneScreen({ input, activity, onAgain }: { input: RequestInput; activity: string; onAgain: () => void }) {
   const h = useRef<HTMLHeadingElement>(null)
   useEffect(() => { h.current?.focus({ preventScroll: true }) }, [])
-  const activity = DEMO_INDUSTRIES.find((x) => x.key === input.industry)?.label ?? input.industry
   const rows: [string, string][] = [["Contact", input.contact], ["Company", input.company], ["Building", input.address], ["Activity", activity]]
   return (
     <section className="card done" aria-labelledby="h-done">

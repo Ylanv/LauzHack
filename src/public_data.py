@@ -1,9 +1,5 @@
 """Probe every public data source for one company + address. 0 LLM token.
 
-Usage:
-    python scripts/probe_sources.py "Victorinox AG" "Schmiedgasse 57, 6438 Ibach"
-    python scripts/probe_sources.py "Victorinox AG" "Schmiedgasse 57, 6438 Ibach" --out probe_out
-
 Writes <out>/<slug>/result.json + ortho.jpg (crop on the building footprint, outline in red).
 Each source reports a status: ok | partial | empty | not_found | ambiguous | error.
 
@@ -16,11 +12,9 @@ Rules learned from tests (see README):
 - Soil class is optional: cantons map it on their own initiative (ZH, BE, SZ, ZG, TG, GR… mostly absent).
 """
 
-import argparse
 import io
 import json
 import re
-import sys
 import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -494,31 +488,3 @@ def probe(company, address, out_root="probe_out"):
 
 
 STEPS = ["zefix", "geocode", "regbl", "footprint", "height", "hazards_national", "hazards_cantonal", "swissimage"]
-
-
-def summary(res):
-    lines = [f"\n=== {res['company']} — {res['address']}  ({res.get('total_ms')} ms)"]
-    if res.get("error"):
-        lines.append(f"  ERROR → {res['error']}")
-    for k in STEPS:
-        v = res.get(k)
-        if v:
-            d = {kk: vv for kk, vv in strip_binary(v).items() if kk not in ("status", "ms", "geometry", "file", "jpeg")}
-            lines.append(f"  [{v['status']:>9}] {k:<16} {json.dumps(d, ensure_ascii=False)[:220]}")
-    return "\n".join(lines)
-
-
-def main():
-    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("company")
-    ap.add_argument("address")
-    ap.add_argument("--out", default="probe_out")
-    a = ap.parse_args()
-    res, out_dir = probe(a.company, a.address, a.out)
-    (out_dir / "result.json").write_text(json.dumps(strip_binary(res), ensure_ascii=False, indent=2), encoding="utf-8")
-    sys.stdout.reconfigure(encoding="utf-8")
-    print(summary(res))
-
-
-if __name__ == "__main__":
-    main()

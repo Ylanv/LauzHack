@@ -50,6 +50,11 @@ def block_public(probe: dict, profile: dict, reconstruction: dict) -> dict:
     return {"status": "ok", "data": data}
 
 
+def _vision_failed(exc: Exception, photos: list, **extra) -> dict:
+    """The vision call failed (rate limit, invalid JSON twice…): keep the photos and say why — the report still needs them."""
+    return {"status": "error", "note": f"vision failed: {type(exc).__name__}: {str(exc)[:160]}", "data": None, "photos": photos, **extra}
+
+
 # ---------------------------------------------------------------- B
 def block_aerial(probe: dict, use_llm: bool = True) -> dict:
     img = probe.get("swissimage", {})
@@ -62,8 +67,11 @@ def block_aerial(probe: dict, use_llm: bool = True) -> dict:
                 "data": None, "photos": photos, "llm_input": {"prompt": VISION_PROMPT.format(m_per_px=img.get("m_per_px")),
                                                               "schema": "VISION_SCHEMA", "images": ["orthophoto"]}}
     from src.llm import llm_call
-    data, call = llm_call("vision", SYSTEM, VISION_PROMPT.format(m_per_px=img.get("m_per_px")), VISION_SCHEMA,
-                          "aerial_image", images=[img["jpeg"]], max_tokens=900)
+    try:
+        data, call = llm_call("vision", SYSTEM, VISION_PROMPT.format(m_per_px=img.get("m_per_px")), VISION_SCHEMA,
+                              "aerial_image", images=[img["jpeg"]], max_tokens=900)
+    except Exception as e:  # noqa: BLE001
+        return _vision_failed(e, photos)
     return {"status": "ok", "data": data, "photos": photos, "llm_call": call}
 
 
@@ -77,8 +85,11 @@ def block_facade(probe: dict, company: str, address: str, use_llm: bool = True) 
     if not use_llm or not llm_available("vision"):
         return {"status": "skipped", "note": "LLM not called", "data": None, "photos": photos, "camera": sv.get("camera")}
     from src.llm import llm_call
-    data, call = llm_call("vision", SYSTEM, FACADE_PROMPT.format(company=company, address=address), FACADE_SCHEMA,
-                          "facade", images=[sv["jpeg"]], max_tokens=700)
+    try:
+        data, call = llm_call("vision", SYSTEM, FACADE_PROMPT.format(company=company, address=address), FACADE_SCHEMA,
+                              "facade", images=[sv["jpeg"]], max_tokens=700)
+    except Exception as e:  # noqa: BLE001
+        return _vision_failed(e, photos, camera=sv.get("camera"))
     return {"status": "ok", "data": data, "photos": photos, "camera": sv.get("camera"), "llm_call": call}
 
 
@@ -99,6 +110,10 @@ def block_website(scraped: dict, company: str, address: str, purpose: str | None
                                text=scraped["text_excerpt"][:3500])
     # Photos need a vision-capable model: use MODEL_VISION if photos are attached.
     role = "vision" if photos and llm_available("vision") else "extraction"
-    data, call = llm_call(role, SYSTEM, prompt, WEB_SCHEMA, "website", images=[p["jpeg"] for p in photos] if role == "vision" else None,
-                          max_tokens=1400)
+    try:
+        data, call = llm_call(role, SYSTEM, prompt, WEB_SCHEMA, "website",
+                              images=[p["jpeg"] for p in photos] if role == "vision" else None, max_tokens=1400)
+    except Exception as e:  # noqa: BLE001
+        return _vision_failed(e, photos, meta=meta, raw={"risk_sentences": scraped["risk_sentences"],
+                                                         "text_excerpt": scraped["text_excerpt"][:3500]})
     return {"status": "ok", "data": data, "meta": meta, "photos": photos, "llm_call": call}

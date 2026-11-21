@@ -13,6 +13,7 @@ import base64
 import json
 import os
 import time
+from urllib.parse import urlsplit
 
 import openai
 from openai import OpenAI
@@ -33,6 +34,10 @@ def resolve_endpoint(provider: str, cfg: dict | None = None) -> tuple[str | None
     key = os.environ.get(d.get("key_env", ""), "") or None
     base = os.environ.get(d["base_url_env"], "") if d.get("base_url_env") else None
     base = base or d.get("base_url")
+    if not key and provider == "openrouter" and d.get("key_env") == "OPENROUTER_API_KEY":
+        llm_base = os.environ.get("LLM_BASE_URL", "https://openrouter.ai/api/v1")
+        if urlsplit(llm_base).hostname == "openrouter.ai" and urlsplit(base or "").hostname == "openrouter.ai":
+            key = os.environ.get("LLM_API_KEY") or None
     return key, base
 
 

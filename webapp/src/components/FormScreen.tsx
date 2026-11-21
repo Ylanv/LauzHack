@@ -7,7 +7,7 @@ import type { Coords, RequestInput } from "../pipeline/types"
 type Key = "contact" | "company" | "address" | "industry" | "code"
 export interface ServerError { kind: AssessErrorKind; message: string }
 interface Props {
-  onSubmit: (i: RequestInput, c: Coords, accessCode: string) => void
+  onSubmit: (i: RequestInput, c: Coords, accessCode: string, activity: string) => void
   say: (t: string, mood?: "puzzled") => void
   /** values of the previous attempt: kept after an error */
   initial?: { input: RequestInput; coords: Coords; picked: string } | null
@@ -22,6 +22,7 @@ export default function FormScreen({ onSubmit, say, initial, serverError }: Prop
   const [code, setCode] = useState("")
   const [err, setErr] = useState<Partial<Record<Key, string>>>({})
   const [items, setItems] = useState<AddressHit[]>([])
+  const [addressFailed, setAddressFailed] = useState(false)
   const [open, setOpen] = useState(false)
   const [idx, setIdx] = useState(-1)
   const [inds, setInds] = useState<Industry[] | null>(null)
@@ -48,12 +49,14 @@ export default function FormScreen({ onSubmit, say, initial, serverError }: Prop
     set("address", val)
     coords.current = null; picked.current = ""
     window.clearTimeout(timer.current)
-    if (val.trim().length < 2) { setOpen(false); return }
     const my = ++seq.current
+    setOpen(false)
+    setAddressFailed(false)
+    if (val.trim().length < 2) return
     timer.current = window.setTimeout(async () => {
-      const r = await searchAddress(val)
+      const r = await searchAddress(val, DEMO).catch(() => null)
       if (my !== seq.current) return
-      setItems(r); setIdx(-1); setOpen(true)
+      setItems(r ?? []); setAddressFailed(!r); setIdx(-1); setOpen(true)
     }, 140)
   }
   const pick = (i: number) => {
@@ -90,7 +93,7 @@ export default function FormScreen({ onSubmit, say, initial, serverError }: Prop
     ev?.preventDefault()
     const t = { contact: v.contact.trim(), company: v.company.trim(), address: v.address.trim(), industry: v.industry }
     setV(t)
-    if (validate(t)) onSubmit(t, coords.current!, code.trim())
+    if (validate(t)) onSubmit(t, coords.current!, code.trim(), inds?.find((x) => x.key === t.industry)?.label ?? t.industry)
   }
   const demo = () => {
     setV({ ...MOCK.sample }); setErr({})
@@ -132,7 +135,7 @@ export default function FormScreen({ onSubmit, say, initial, serverError }: Prop
               placeholder="Rue du Champ-Blanchod 7, 1228 Plan-les-Ouates" aria-describedby="e-address" aria-invalid={!!err.address}
               onChange={(e) => onAddress(e.target.value)} onKeyDown={onKey} onFocus={() => say(HINTS.address)} onBlur={() => setTimeout(() => setOpen(false), 120)} />
             <ul id="acList" role="listbox" aria-label="Matching addresses" hidden={!open}>
-              {!items.length ? <li className="acn" role="option" aria-disabled="true">No matching address. Keep typing the street, number and town.</li> :
+              {!items.length ? <li className="acn" role="option" aria-disabled="true">{addressFailed ? "Address search unavailable. Edit the address to try again." : "No matching address. Keep typing the street, number and town."}</li> :
                 items.map((x, i) => {
                   const n = norm(v.address).trim(), pos = norm(x.text).indexOf(n)
                   return (

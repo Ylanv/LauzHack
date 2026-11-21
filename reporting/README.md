@@ -1,8 +1,8 @@
-# AXA Smart Property — report kit (frozen report-writing contract)
+# AXA Smart Property — report kit (report-writing contract)
 
-> Originally delivered as `AXA_Underwriting_Report_Kit_ClaudeCode_v2/`. The schemas now live in `schemas/COMBINED_FEATURE/` and `schemas/OUTPUT/` (see `schemas/README.md`); prompt, template and specs stay in this folder; examples are in `examples/EXAMPLE_SYNTHETIC_*.json`. File hashes: `FROZEN.sha256`.
+> Originally delivered as `AXA_Underwriting_Report_Kit_ClaudeCode_v2/`. The schemas now live in `schemas/COMBINED_FEATURE/` and `schemas/OUTPUT/` (see `schemas/README.md`); prompt, template and specs stay in this folder; examples are in `examples/EXAMPLE_SYNTHETIC_*.json`. **Only the two JSON schemas are frozen** (`schemas/COMBINED_FEATURE/` and `schemas/OUTPUT/`: the web app dashboard and `src/report/` read them); their hashes are in `FROZEN.sha256`. The prompt, the template and the specs are **not frozen** and may evolve (the prompt rule 0 now handles real, non-synthetic cases).
 
-This kit contains the **frozen report-generation contract** for the 10-hour, synthetic-only underwriting report benchmark. It is intended to be copied into the existing repository; it does not replace the feature/ETL contract the team already has.
+This kit contains the report-generation contract, first written for the 10-hour, synthetic-only underwriting report benchmark. It is intended to be copied into the existing repository; it does not replace the feature/ETL contract the team already has.
 
 ## Exact file roles
 

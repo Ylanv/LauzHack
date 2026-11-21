@@ -15,9 +15,11 @@ GET  /api/industries                   → drop-down values for industry_type
 GET  /api/health                       → configuration check
 """
 
+import logging
 import sys
 from pathlib import Path
 from typing import Literal
+from uuid import uuid4
 
 # Make `src.*` imports work whatever the working directory (local or Vercel).
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -97,36 +99,31 @@ REPORTS_DIR = Path(_os.environ.get("REPORTS_DIR") or ("/tmp/reports" if config.O
 _JOBS: dict[str, Path] = {}
 
 
-def _run_job(report_pipeline, doc: dict, out: Path) -> None:
-    """Runs the pipeline; any unexpected exception ends the job as failed instead of leaving it "running" forever."""
-    try:
-        report_pipeline.run(doc, out)
-    except Exception as e:  # noqa: BLE001
-        try:
-            m = _json.loads((out / "metrics.json").read_text(encoding="utf-8"))
-        except (OSError, ValueError):
-            m = {"stages": []}
-        done = [s.get("stage") for s in m.get("stages", [])]
-        stage = {"etl": "features", "features": "llm", "llm": "validate"}.get(done[-1] if done else None, "etl")
-        m.update(status="failed", error={"stage": stage, "message": f"{type(e).__name__}: {str(e)[:300]}"})
-        (out / "metrics.json").write_text(_json.dumps(m, ensure_ascii=False, indent=2), encoding="utf-8")
-
-
 @app.post("/api/reports", status_code=202)
 def start_report(req: LlmInputRequest, x_access_code: str | None = Header(None)) -> dict:
     if config.ACCESS_CODE and x_access_code != config.ACCESS_CODE:
         raise HTTPException(401, "Invalid or missing access code (X-Access-Code header).")
     from src.report import pipeline as report_pipeline
-    slug = _re.sub(r"[^a-z0-9]+", "-", req.company_legal_name.lower()).strip("-")[:40] or "case"
-    job_id = f"{slug}-{_time.strftime('%Y%m%d-%H%M%S')}"
+    slug = _re.sub(r"[^a-z0-9]+", "-", req.company_legal_name.lower()).strip("-")[:35] or "case"
+    job_id = f"{slug}-{_time.strftime('%Y%m%d-%H%M%S')}-{uuid4().hex[:12]}"
     out = REPORTS_DIR / job_id
-    out.mkdir(parents=True, exist_ok=True)
+    out.mkdir(parents=True)
     (out / "metrics.json").write_text(_json.dumps({"status": "running", "stages": []}), encoding="utf-8")
     doc = {"schema_version": "1.0-customer-request", "case_id": job_id, "client_name": req.client_name,
            "company_legal_name": req.company_legal_name, "building_address": req.address,
            "industry_type": req.industry_type, "website": req.website}
     _JOBS[job_id] = out
-    threading.Thread(target=_run_job, args=(report_pipeline, doc, out), daemon=True).start()
+    def run_job() -> None:
+        try:
+            report_pipeline.run(doc, out)
+        except Exception:
+            logging.getLogger(__name__).exception("Report job %s failed", job_id)
+            (out / "metrics.json").write_text(
+                _json.dumps({"status": "failed", "stages": [], "error": {"message": "Report generation failed."}}),
+                encoding="utf-8",
+            )
+
+    threading.Thread(target=run_job, daemon=True).start()
     return {"job_id": job_id}
 
 
