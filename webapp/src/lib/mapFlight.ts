@@ -36,9 +36,9 @@ export const MapFlight = (() => {
   const cam = { lon: 0, lat: 22, zoom: 1.8 }
   const anim = { z: 0, marker: 0, aerial: 0, inset: 0, hz: [0, 0, 0], obsAt: [-1, -1, -1], capA: 1, capText: "", t: 0 }
   const INS = { q: [] as Insight[], shown: [] as (Insight & { t0: number })[], last: -9 }
-  let variant: "A" | "B" = "A", appliedVariant = "", free = false
+  let variant: "A" | "B" = "B", appliedVariant = "", free = false
   const inset = { t0: -1 }
-  const aer = { key: "", img: null as HTMLCanvasElement | null, ok: false, fail: false }
+  const aer = { key: "", img: null as HTMLCanvasElement | null, ok: false, fail: false, z: 18, want: 18 }
 
   const avail = () => Math.min(W - panelW, H)
   const zGlobe = () => Math.log2((TAU * avail() * 0.36) / 512)
@@ -54,21 +54,31 @@ export const MapFlight = (() => {
   }
 
   /** Real SWISSIMAGE aerial for the address: a mosaic of 5x5 WMTS tiles (zoom 18) cropped to 800x500 px, about 330 m across. Falls back to an illustration. */
-  function loadAerial() {
+  function loadAerial(z = aer.want) {
     if (!SHOW_OVERLAYS && variant !== "A") return
-    const b = S.coords, key = b.lon.toFixed(5) + "," + b.lat.toFixed(5)
+    const b = S.coords, spot = b.lon.toFixed(5) + "," + b.lat.toFixed(5), key = spot + "@" + z
     if (aer.key === key) return
-    aer.key = key; aer.ok = false; aer.fail = false; aer.img = null
-    const Z = AZ, n = 2 ** Z, fx = ((b.lon + 180) / 360) * n, fy = ((1 - Math.log(Math.tan(b.lat * D) + 1 / Math.cos(b.lat * D)) / Math.PI) / 2) * n
+    if (aer.key.split("@")[0] !== spot) { aer.ok = false; aer.fail = false; aer.img = null }   // new address: start over; same address: keep showing the old zoom until the new one is ready
+    aer.key = key
+    const n = 2 ** z, fx = ((b.lon + 180) / 360) * n, fy = ((1 - Math.log(Math.tan(b.lat * D) + 1 / Math.cos(b.lat * D)) / Math.PI) / 2) * n
     const tx = Math.floor(fx), ty = Math.floor(fy), cvs = document.createElement("canvas"); cvs.width = AW; cvs.height = AH
     const c2 = cvs.getContext("2d")!; c2.fillStyle = "#e1e4f6"; c2.fillRect(0, 0, AW, AH)
     let errs = 0, good = 0
+    const settle = () => { if (aer.key !== key || good + errs < 25) return; if (good) { aer.img = cvs; aer.z = z; aer.ok = true } else if (!aer.img) aer.fail = true }
     for (let j = -2; j <= 2; j++) for (let i = -2; i <= 2; i++) {
       const img = new Image()
-      img.onload = () => { if (aer.key !== key) return; c2.drawImage(img, Math.round((tx + i - fx) * 256 + AW / 2), Math.round((ty + j - fy) * 256 + AH / 2)); good++; aer.img = cvs; aer.ok = true }
-      img.onerror = () => { if (aer.key === key && ++errs === 25 && !good) aer.fail = true }
-      img.src = `https://wmts.geo.admin.ch/1.0.0/ch.swisstopo.swissimage/default/current/3857/${Z}/${tx + i}/${ty + j}.jpeg`
+      img.onload = () => { if (aer.key !== key) return; c2.drawImage(img, Math.round((tx + i - fx) * 256 + AW / 2), Math.round((ty + j - fy) * 256 + AH / 2)); good++; settle() }
+      img.onerror = () => { errs++; settle() }
+      img.src = `https://wmts.geo.admin.ch/1.0.0/ch.swisstopo.swissimage/default/current/3857/${z}/${tx + i}/${ty + j}.jpeg`
     }
+  }
+  /** once the surroundings are known: widen the satellite window (zoom 18 -> 17) so that what it names is actually in the picture */
+  function fitAerial() {
+    let need = 0
+    const b = S.coords, kx = 111320 * Math.cos(b.lat * D), ky = 110574
+    FE.list.forEach((f) => { if (f.kind === "building") return; const e = Math.abs((f.at[0] - b.lon) * kx), nn = Math.abs((f.at[1] - b.lat) * ky); need = Math.max(need, (2 * e) / 0.86, ((2 * nn) / 0.86) * (AW / AH)) })
+    aer.want = need <= groundW(18) ? 18 : 17
+    loadAerial()
   }
   /* metres east/north of the building -> screen */
   const m = (e: number, n: number) => {
@@ -189,24 +199,53 @@ export const MapFlight = (() => {
     else if (geom.type === "MultiLineString") geom.coordinates.forEach((l: number[][]) => ringPath(l, false))
   }
 
+  /** a line feature drawn as a framed corridor w px wide: dark halo, bright edges, translucent hatched inside */
+  let band: HTMLCanvasElement | null = null
+  function corridor(geom: any, w: number, col: string, a: number) {
+    if (!band) band = document.createElement("canvas")
+    if (band.width !== cv.width || band.height !== cv.height) { band.width = cv.width; band.height = cv.height }
+    const b = band.getContext("2d")!, keep = ctx
+    b.setTransform(1, 0, 0, 1, 0, 0); b.clearRect(0, 0, band.width, band.height); b.setTransform(dpr, 0, 0, dpr, 0, 0)
+    b.lineJoin = "round"; b.lineCap = "round"
+    ctx = b; b.beginPath(); tracePath(geom); ctx = keep
+    b.strokeStyle = "rgba(10,14,46,.6)"; b.lineWidth = w + 9; b.stroke()
+    b.strokeStyle = col; b.lineWidth = w + 5; b.stroke()
+    b.globalCompositeOperation = "destination-out"; b.lineWidth = w; b.stroke()
+    b.globalCompositeOperation = "source-over"; b.strokeStyle = col + "40"; b.stroke()
+    const hp = b.createPattern(hatchCanvas(col), "repeat"); if (hp) { b.strokeStyle = hp; b.stroke() }
+    ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = a; ctx.drawImage(band, 0, 0); ctx.restore()
+  }
   /** Highlighted geometry, then tidy cards in two columns beside the building, joined to their feature by a thin elbow leader. */
   function drawFeatures(t: number) {
     const vis = FE.list.filter((f) => f.t0 >= 0).map((f) => ({ f, a: isStatic ? 1 : sm((t - f.t0) / 0.7) })).filter((v) => v.a >= 0.01)
     if (!vis.length) return
+    // colour code per kind (same as the satellite window): every zone framed (dark halo + bright edge) and hatched inside;
+    // lines (road, river) become a corridor of their real width with framed edges, not a thin stroke
+    const ppm = mpx()
     vis.forEach(({ f, a }) => {
-      const K = KIND[f.kind], isPoly = f.geom.type.includes("Polygon"), thin = f.kind === "road" || (f.kind === "water" && !isPoly)
+      const col = ZC[f.kind], isPoly = f.geom.type.includes("Polygon")
       ctx.save(); ctx.globalAlpha = a; ctx.lineJoin = "round"; ctx.lineCap = "round"
-      ctx.beginPath(); tracePath(f.geom)
-      if (isPoly) { ctx.fillStyle = f.kind === "forest" ? "rgba(134,151,196,.34)" : f.kind === "water" ? "rgba(112,145,230,.34)" : "rgba(61,82,160,.30)"; ctx.fill() }
-      ctx.strokeStyle = "rgba(255,255,255,.95)"; ctx.lineWidth = thin ? 6 : 4.5; ctx.stroke()
-      ctx.strokeStyle = K.col; ctx.lineWidth = thin ? 3 : 2; if (f.kind === "road" && !isStatic) { ctx.setLineDash([9, 7]); ctx.lineDashOffset = -t * 16 } ctx.stroke(); ctx.setLineDash([])
+      if (isPoly) {
+        ctx.beginPath(); tracePath(f.geom)
+        ctx.fillStyle = f.kind === "building" ? "rgba(255,255,255,.16)" : col + "38"; ctx.fill()
+        const hp = hatch(col); if (hp) { ctx.fillStyle = hp; ctx.globalAlpha = a * 0.85; ctx.fill(); ctx.globalAlpha = a }
+        ctx.strokeStyle = "rgba(10,14,46,.6)"; ctx.lineWidth = 6; ctx.stroke(); ctx.strokeStyle = col; ctx.lineWidth = 3; ctx.stroke()
+      } else corridor(f.geom, Math.max(12, (f.kind === "road" ? 12 : 18) * ppm), col, a)
       ctx.restore()
     })
-    // cards
+    void t
+    // cards (component-library pattern): header = icon + label, with a bottom border; body = one short muted description
+    const UI = 'Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif'
+    const CW = 232, HEAD = 34, LH = 17
     const cards = vis.map(({ f, a }) => {
-      const K = KIND[f.kind], p = map!.project(f.at), main = f.kind === "building" ? K.title : `${f.name || K.title} · ${distLabel(f.d)}`
-      ctx.font = "650 13px system-ui,sans-serif"; const w1 = ctx.measureText(main).width
-      return { f, a, K, p, main, w: Math.max(150, w1 + 38), h: 42, side: p.x < cxm ? -1 : 1, y: 0 }
+      const p = map!.project(f.at), dist = f.d < 3 ? "Adjoining" : distLabel(f.d) + " away"
+      const label = f.kind === "building" ? "Your building" : f.kind === "neighbour" ? "Neighbouring building" : f.kind === "road" ? "Main road" : f.kind === "water" ? f.name || "Water" : "Wooded area"
+      const desc = f.kind === "building" ? "The footprint matched to your address."
+        : f.kind === "neighbour" ? `${dist}. Matters for fire spread.`
+        : f.kind === "road" ? `${f.name ? f.name + ", " : ""}${dist.toLowerCase()}. Access for emergency services.`
+        : f.kind === "water" ? `${dist}. Flood and runoff exposure.` : `${dist}. Wildfire and storm exposure.`
+      const lines = wrap(desc, CW - 28, `400 12.5px ${UI}`)
+      return { f, a, p, label, lines, w: CW, h: HEAD + 12 + lines.length * LH + 10, side: p.x < cxm ? -1 : 1, y: 0 }
     })
     const gap = 10, top = 84, bottom = H - 64
     ;[-1, 1].forEach((side) => {
@@ -218,38 +257,84 @@ export const MapFlight = (() => {
       if (col.length && col[0].y < lo) { col[0].y = lo; for (let i = 1; i < col.length; i++) col[i].y = Math.max(col[i].y, col[i - 1].y + col[i - 1].h + gap) }
     })
     const dx = Math.min(250, Math.max(120, W / 2 - 220))
-    cards.forEach(({ a, K, p, main, w, h, side, y }) => {
+    cards.forEach(({ f, a, p, label, lines, w, h, side, y }) => {
       const bx = clampF(side < 0 ? cxm - dx - w : cxm + dx, 16, W - w - 16), by = y
-      const ex = side < 0 ? bx + w : bx, ey = by + h / 2, mx = ex - side * 20
+      const ex = side < 0 ? bx + w : bx, ey = by + HEAD / 2, mx = ex - side * 20
       ctx.save(); ctx.globalAlpha = a; ctx.lineJoin = "round"
-      ctx.strokeStyle = K.col; ctx.globalAlpha = a * 0.75; ctx.lineWidth = 1.25; ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(mx, ey); ctx.lineTo(ex, ey); ctx.stroke(); ctx.globalAlpha = a
-      ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.arc(p.x, p.y, 4.5, 0, TAU); ctx.fill(); ctx.lineWidth = 2; ctx.stroke()
-      ctx.shadowColor = "rgba(61,82,160,.22)"; ctx.shadowBlur = 18; ctx.shadowOffsetY = 6; rrect(bx, by, w, h, 12); ctx.fillStyle = "rgba(255,255,255,.97)"; ctx.fill(); ctx.shadowColor = "transparent"
-      ctx.fillStyle = K.col; rrect(bx + 13, by + 11, 7, 7, 2.5); ctx.fill()
-      text(K.tag.toUpperCase(), bx + 26, by + 14.5, 9.5, 600, "#8697c4", "left", 1.1)
-      text(main, bx + 13, by + 29.5, 13, 650, "#1c2250", "left", 0)
+      const kc = ZC[f.kind]
+      ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(mx, ey); ctx.lineTo(ex, ey)
+      ctx.strokeStyle = "rgba(10,14,46,.55)"; ctx.lineWidth = 3.6; ctx.stroke(); ctx.strokeStyle = kc; ctx.lineWidth = 1.6; ctx.stroke()
+      ctx.fillStyle = kc; ctx.beginPath(); ctx.arc(p.x, p.y, 5, 0, TAU); ctx.fill(); ctx.strokeStyle = "rgba(10,14,46,.7)"; ctx.lineWidth = 1.5; ctx.stroke()
+      // card: white, 1 px border, 12 px radius, soft shadow
+      ctx.shadowColor = "rgba(28,34,80,.18)"; ctx.shadowBlur = 16; ctx.shadowOffsetY = 4; rrect(bx, by, w, h, 12); ctx.fillStyle = "#fff"; ctx.fill(); ctx.shadowColor = "transparent"
+      ctx.strokeStyle = "#e6e4ef"; ctx.lineWidth = 1; ctx.stroke()
+      ctx.beginPath(); ctx.moveTo(bx, by + HEAD + 0.5); ctx.lineTo(bx + w, by + HEAD + 0.5); ctx.stroke()   // header border
+      kindIcon(f.kind, bx + 14, by + HEAD / 2, kc)
+      text(label, bx + 34, by + HEAD / 2 + 0.5, 13.5, 600, "#1c2250", "left", 0)
+      ctx.font = `400 12.5px ${UI}`
+      lines.forEach((l, k) => text(l, bx + 14, by + HEAD + 12 + LH / 2 + k * LH, 12.5, 400, "#6b6f86", "left", 0))
       ctx.restore()
     })
   }
-
+  /** 14 px line icons in the kind's colour (dark outline so white still reads) */
+  function kindIcon(kind: Feat["kind"], x: number, y: number, col: string) {
+    ctx.save(); ctx.translate(x, y); ctx.lineJoin = "round"; ctx.lineCap = "round"
+    const path = () => {
+      ctx.beginPath()
+      if (kind === "building") { ctx.moveTo(-6, 6); ctx.lineTo(-6, -1); ctx.lineTo(0, -6); ctx.lineTo(6, -1); ctx.lineTo(6, 6); ctx.closePath(); ctx.moveTo(-2, 6); ctx.lineTo(-2, 2); ctx.lineTo(2, 2); ctx.lineTo(2, 6) }
+      else if (kind === "neighbour") { ctx.rect(-7, -3, 6, 9); ctx.rect(1, -6, 6, 12) }
+      else if (kind === "road") { ctx.moveTo(-4, 7); ctx.lineTo(-2, -7); ctx.moveTo(4, 7); ctx.lineTo(2, -7); ctx.moveTo(0, 5); ctx.lineTo(0, 3); ctx.moveTo(0, 0); ctx.lineTo(0, -2) }
+      else if (kind === "water") { for (const dy of [-3, 3]) { ctx.moveTo(-7, dy); ctx.quadraticCurveTo(-3.5, dy - 3, 0, dy); ctx.quadraticCurveTo(3.5, dy + 3, 7, dy) } }
+      else { ctx.moveTo(0, -7); ctx.lineTo(6, 3); ctx.lineTo(-6, 3); ctx.closePath(); ctx.moveTo(0, 3); ctx.lineTo(0, 7) }
+    }
+    path(); ctx.strokeStyle = "rgba(10,14,46,.75)"; ctx.lineWidth = 3.4; ctx.stroke()
+    path(); ctx.strokeStyle = col; ctx.lineWidth = 1.7; ctx.stroke()
+    ctx.restore()
+  }
   /* ---- variant A: satellite window annotated with the insurance-relevant features (vector footprints drawn on the real image) ---- */
-  const AW = 800, AH = 500, AZ = 18   // aerial mosaic: 800x500 px at zoom 18, about 330 m across in Switzerland
-  const groundW = () => (AW * 156543.03392 * Math.cos(S.coords.lat * D)) / 2 ** AZ
+  const AW = 800, AH = 500   // aerial mosaic: 800x500 px; about 330 m across at zoom 18, 660 m at zoom 17
+  const groundW = (z = aer.z) => (AW * 156543.03392 * Math.cos(S.coords.lat * D)) / 2 ** z
   const ZC: Record<Feat["kind"], string> = { building: "#ffffff", neighbour: "#ff8a3d", road: "#e5383b", water: "#12b5cb", forest: "#2fb344" }
   const ZT: Record<Feat["kind"], string> = { building: "Your building", neighbour: "Neighbour", road: "Main road", water: "Water", forest: "Forest" }
   const ZORDER: Feat["kind"][] = ["forest", "water", "road", "neighbour", "building"]
-  const HAZ = ["Runoff · medium", "Hail · moderate", "Seismic Z3a"]
-  const pats: Record<string, CanvasPattern | null> = {}
-  const hatch = (col: string) => {
-    if (pats[col] !== undefined) return pats[col]
+  const pats: Record<string, CanvasPattern | null> = {}, hcv: Record<string, HTMLCanvasElement> = {}
+  const hatchCanvas = (col: string) => {
+    if (hcv[col]) return hcv[col]
     const p = document.createElement("canvas"); p.width = p.height = 9; const c = p.getContext("2d")!
     c.strokeStyle = col; c.lineWidth = 1.6; c.beginPath(); c.moveTo(-1, 10); c.lineTo(10, -1); c.moveTo(-1, 1); c.lineTo(1, -1); c.moveTo(8, 10); c.lineTo(10, 8); c.stroke()
-    return (pats[col] = ctx.createPattern(p, "repeat"))
+    return (hcv[col] = p)
   }
+  const hatch = (col: string) => (pats[col] !== undefined ? pats[col] : (pats[col] = ctx.createPattern(hatchCanvas(col), "repeat")))
   let insetBottom = 0
-  function drawInset(t: number) {
+  /** where each card of the satellite window goes (positions relative to the image): nearest free slot that covers no outlined zone */
+  let cardKey = "", cards: { f: Feat; label: string; w: number; ax: number; ay: number; bx: number; by: number }[] = []
+  function layoutCards(toPx: (p: number[]) => number[], ix: number, iy: number, iw: number, ih: number) {
+    const out: typeof cards = [], hh = 22
+    const slots = [[0, 0], [1, 0], [0, 1], [1, 1], [0, 0.5], [1, 0.5], [0.5, 0], [0.5, 1], [0.25, 0], [0.75, 0], [0.25, 1], [0.75, 1]].map(([sx, sy]) => ({ sx, sy, used: false }))
+    const feats = FE.list.filter((f) => f.t0 >= 0).sort((p, q) => ZORDER.indexOf(q.kind) - ZORDER.indexOf(p.kind))
+    const pts: number[][] = []   // points along every outlined zone (every ~6 px): a card must not sit on what it names, nor on another zone
+    const addLine = (cs: number[][]) => { for (let k = 0; k + 1 < cs.length; k++) { const [x1, y1] = toPx(cs[k]), [x2, y2] = toPx(cs[k + 1]), nseg = Math.max(1, Math.ceil(Math.hypot(x2 - x1, y2 - y1) / 6)); for (let q = 0; q <= nseg; q++) pts.push([x1 + ((x2 - x1) * q) / nseg, y1 + ((y2 - y1) * q) / nseg]) } }
+    feats.forEach((f) => { const g = f.geom; if (g.type === "LineString") addLine(g.coordinates); else if (g.type === "MultiLineString" || g.type === "Polygon") g.coordinates.forEach(addLine); else if (g.type === "MultiPolygon") g.coordinates.forEach((p: number[][][]) => p.forEach(addLine)) })
+    const covered = (x0: number, y0: number, w0: number, h0: number) => { let n = 0; for (const [px, py] of pts) if (px > x0 - 5 && px < x0 + w0 + 5 && py > y0 - 5 && py < y0 + h0 + 5) n++; return n }
+    feats.forEach((f) => {
+      const [ax, ay] = toPx(f.at)
+      if (ax < ix + 4 || ax > ix + iw - 4 || ay < iy + 4 || ay > iy + ih - 4) return   // not in the picture: not named either
+      const label = f.kind === "building" ? ZT.building : `${f.name && f.kind !== "neighbour" ? f.name : ZT[f.kind]} · ${distLabel(f.d)}`
+      ctx.font = "650 11px system-ui,sans-serif"; const w = ctx.measureText(label).width + 30
+      const pos = (s: { sx: number; sy: number }) => [ix + 8 + s.sx * (iw - 16 - w), iy + 8 + s.sy * (ih - 16 - hh)]
+      let best: (typeof slots)[0] | null = null, bd = Infinity
+      slots.forEach((s) => {
+        if (s.used) return; const [px, py] = pos(s)
+        if (out.some((o) => px < ix + o.bx + o.w + 6 && px + w + 6 > ix + o.bx && py < iy + o.by + hh + 4 && py + hh + 4 > iy + o.by)) return
+        const d = Math.hypot(px + w / 2 - ax, py + hh / 2 - ay) + covered(px, py, w, hh) * 400; if (d < bd) { bd = d; best = s }
+      })
+      if (!best) return; (best as { used: boolean }).used = true
+      const [bx, by] = pos(best); out.push({ f, label, w, ax: ax - ix, ay: ay - iy, bx: bx - ix, by: by - iy })
+    })
+    return out
+  }  function drawInset(t: number) {
     const a = anim.inset; insetBottom = 0; if (a < 0.01 || variant !== "A") return
-    const cw = Math.min(470, W - 32), pad = 10, iw = cw - pad * 2, ih = (iw * AH) / AW, head = 30, foot = 52, h = pad + head + ih + foot
+    const cw = Math.min(470, W - 32), pad = 10, iw = cw - pad * 2, ih = (iw * AH) / AW, head = 30, foot = 10, h = pad + head + ih + foot
     const x = W - cw - 24, y = 22 + (1 - a) * -10; insetBottom = 22 + h
     ctx.save(); ctx.globalAlpha = a
     ctx.shadowColor = "rgba(61,82,160,.28)"; ctx.shadowBlur = 30; ctx.shadowOffsetY = 12; rrect(x, y, cw, h, 20); ctx.fillStyle = "rgba(255,255,255,.97)"; ctx.fill(); ctx.shadowColor = "transparent"
@@ -288,18 +373,14 @@ export const MapFlight = (() => {
     const mx = ix + iw / 2, my = iy + ih / 2; ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.arc(mx, my, 5.5, 0, TAU); ctx.fill(); ctx.fillStyle = "#3d52a0"; ctx.beginPath(); ctx.arc(mx, my, 3, 0, TAU); ctx.fill()
     if (!FE.done) { const s0 = "Reading the surroundings"; ctx.font = "500 11px system-ui,sans-serif"; const w0 = ctx.measureText(s0).width + 22; rrect(ix + iw / 2 - w0 / 2, iy + ih - 32, w0, 22, 11); ctx.fillStyle = "rgba(255,255,255,.92)"; ctx.fill(); text(s0, ix + iw / 2, iy + ih - 21, 11, 500, "#3d52a0", "center", 0) }
     ctx.restore()
-    // cards in the corners and sides of the image, each with a leader and an arrow to its zone (or to the edge if the zone is beyond the frame)
-    const slots = [[0, 0], [1, 0], [0, 1], [1, 1], [0, 0.5], [1, 0.5]].map(([sx, sy]) => ({ sx, sy, used: false }))
-    vis.sort((p, q) => ZORDER.indexOf(q.f.kind) - ZORDER.indexOf(p.f.kind)).forEach(({ f, a: fa }) => {
-      let [ax, ay] = toPx(f.at); const out = ax < ix + 4 || ax > ix + iw - 4 || ay < iy + 4 || ay > iy + ih - 4
-      ax = clampF(ax, ix + 10, ix + iw - 10); ay = clampF(ay, iy + 10, iy + ih - 10)
-      const label = f.kind === "building" ? ZT.building : `${f.name && f.kind !== "neighbour" ? f.name : ZT[f.kind]} · ${distLabel(f.d)}`
-      ctx.font = "650 11px system-ui,sans-serif"; const w = ctx.measureText(label).width + 30, hh = 22
-      const pos = (s: { sx: number; sy: number }) => [ix + 8 + s.sx * (iw - 16 - w), iy + 8 + s.sy * (ih - 16 - hh)]
-      let best: (typeof slots)[0] | null = null, bd = Infinity
-      slots.forEach((s) => { if (s.used) return; const [px, py] = pos(s), d = Math.hypot(px + w / 2 - ax, py + hh / 2 - ay); if (d < bd) { bd = d; best = s } })
-      if (!best) return; (best as any).used = true
-      const [bx, by] = pos(best), col = f.kind === "building" ? "#3d52a0" : ZC[f.kind]
+    // cards in the corners and sides of the image, each with a leader and an arrow to its zone. The layout is computed ONCE for
+    // all the features (not per frame from the ones already faded in), so cards never jump or flicker; fading only changes opacity.
+    const key = `${FE.list.length}|${aer.z}|${Math.round(iw)}|${Math.round(ih)}`
+    if (cardKey !== key) { cardKey = key; cards = layoutCards(toPx, ix, iy, iw, ih) }
+    const alpha = new Map(vis.map((v) => [v.f, v.a]))
+    cards.forEach((cd) => {
+      const fa = alpha.get(cd.f); if (!fa) return
+      const ax = ix + cd.ax, ay = iy + cd.ay, bx = ix + cd.bx, by = iy + cd.by, w = cd.w, hh = 22, col = cd.f.kind === "building" ? "#3d52a0" : ZC[cd.f.kind]
       const ex = clampF(ax, bx, bx + w), ey = clampF(ay, by, by + hh)
       ctx.globalAlpha = a * fa
       if (Math.hypot(ax - ex, ay - ey) > 6) {
@@ -307,18 +388,12 @@ export const MapFlight = (() => {
         ctx.lineCap = "round"; ctx.strokeStyle = "rgba(255,255,255,.95)"; ctx.lineWidth = 3.4; ctx.beginPath(); ctx.moveTo(ex, ey); ctx.lineTo(ax, ay); ctx.stroke()
         ctx.strokeStyle = col; ctx.lineWidth = 1.6; ctx.stroke()
         ctx.fillStyle = col; ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(ax - 8 * Math.cos(ang - 0.45), ay - 8 * Math.sin(ang - 0.45)); ctx.lineTo(ax - 8 * Math.cos(ang + 0.45), ay - 8 * Math.sin(ang + 0.45)); ctx.closePath(); ctx.fill()
-        if (out) { ctx.strokeStyle = "#fff"; ctx.lineWidth = 1; ctx.stroke() }
       }
       ctx.shadowColor = "rgba(10,14,46,.35)"; ctx.shadowBlur = 10; ctx.shadowOffsetY = 3; rrect(bx, by, w, hh, 11); ctx.fillStyle = "rgba(255,255,255,.97)"; ctx.fill(); ctx.shadowColor = "transparent"
-      ctx.fillStyle = col; ctx.beginPath(); ctx.arc(bx + 12, by + hh / 2, 4, 0, TAU); ctx.fill(); if (f.kind === "building") { ctx.strokeStyle = "#3d52a0"; ctx.lineWidth = 1; ctx.stroke() }
-      text(label, bx + 21, by + hh / 2 + 0.5, 11, 650, "#1c2250", "left", 0)
+      ctx.fillStyle = col; ctx.beginPath(); ctx.arc(bx + 12, by + hh / 2, 4, 0, TAU); ctx.fill(); if (cd.f.kind === "building") { ctx.strokeStyle = "#3d52a0"; ctx.lineWidth = 1; ctx.stroke() }
+      text(cd.label, bx + 21, by + hh / 2 + 0.5, 11, 650, "#1c2250", "left", 0)
     })
     ctx.globalAlpha = a
-    // hazard maps (illustrative until the hazard branch is plugged in) and credits
-    let hx = x + pad + 4; const hy = iy + ih + 18
-    text("Hazards", hx, hy, 10, 600, "#8697c4", "left", 1); hx += 56
-    HAZ.forEach((s) => { ctx.font = "550 11px system-ui,sans-serif"; const w = ctx.measureText(s).width + 18; rrect(hx, hy - 10, w, 20, 10); ctx.fillStyle = "#ede8f5"; ctx.fill(); text(s, hx + 9, hy + 0.5, 11, 550, "#3d52a0", "left", 0); hx += w + 6 })
-    text("Footprints: swisstopo vector map · imagery © swisstopo · hazards illustrative", x + pad + 4, iy + ih + 40, 9.5, 400, "#adbbda", "left", 0.2)
     ctx.restore()
   }
   function step(now: number) {
@@ -356,7 +431,7 @@ export const MapFlight = (() => {
     if (SHOW_FEATURES && !FE.done && cam.zoom > 15.8 && performance.now() - FE.last > 700) {
       FE.last = performance.now(); FE.tries++
       const r = analyseSurroundings(S.coords, (layer, filter) => map!.querySourceFeatures("vt", { sourceLayer: layer, filter: filter as any }) as any[])
-      if (r.hasOwn || FE.tries >= 8) { FE.done = true; FE.list = r.out; FE.list.forEach((f, i) => { f.t0 = isStatic ? 0 : t + 0.4 + i * 1.1 }) }
+      if (r.hasOwn || FE.tries >= 8) { FE.done = true; FE.list = r.out; FE.list.forEach((f, i) => { f.t0 = isStatic ? 0 : t + 0.4 + i * 1.1 }); fitAerial() }
     }
     // overlay
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, W, H)
@@ -372,9 +447,6 @@ export const MapFlight = (() => {
       rrect(ccx - cw0 / 2, ccy - 17, cw0, 34, 17); ctx.fillStyle = "rgba(10,14,46,.72)"; ctx.fill()
       text(anim.capText.toUpperCase(), panelW + (W - panelW) / 2, H > 600 ? 54 : 30, 12, 400, "#fff", "center", 4); ctx.globalAlpha = 1
     }
-    const cr = "Map data © swisstopo · Natural Earth"; ctx.font = "300 10.5px system-ui,sans-serif"; if ("letterSpacing" in ctx) (ctx as any).letterSpacing = ".6px"
-    const crw = ctx.measureText(cr).width + 28; ctx.globalAlpha = 0.85; rrect(cxm - crw / 2, H - 30, crw, 24, 12); ctx.fillStyle = "rgba(255,255,255,.85)"; ctx.fill()
-    ctx.globalAlpha = 1; text("Map data © swisstopo · Natural Earth", cxm, H - 18, 10.5, 400, "#5a6390", "center", 0.6); ctx.globalAlpha = 1
   }
 
   return {
@@ -399,9 +471,9 @@ export const MapFlight = (() => {
     },
     reset() {
       if (free) this.setFree(false)
-      INS.q = []; INS.shown = []; INS.last = -9; FE.list = []; FE.tries = 0; FE.done = false
+      INS.q = []; INS.shown = []; INS.last = -9; FE.list = []; FE.tries = 0; FE.done = false; cardKey = ""
       Object.assign(cam, { lon: 0, lat: 22, zoom: W ? zGlobe() : 1.8 }); inset.t0 = -1; Object.assign(anim, { z: 0, marker: 0, aerial: 0, inset: 0, hz: [0, 0, 0], obsAt: [-1, -1, -1], capA: 1, capText: "" })
-      S.step = "identity"; S.progress = 0; loadAerial()
+      S.step = "identity"; S.progress = 0; aer.want = 18; loadAerial()
     },
     pushInsight(i: Insight) { if (![...INS.q, ...INS.shown].some((x) => x.id === i.id)) INS.q.push(i) },
     frame(now: number) { if (map) step(now) },

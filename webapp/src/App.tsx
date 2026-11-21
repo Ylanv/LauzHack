@@ -1,14 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import Companion, { type Mood } from "./components/Companion"
-import FormScreen from "./components/FormScreen"
+import FormScreen, { type ServerError } from "./components/FormScreen"
 import Flight from "./components/Flight"
 import DoneScreen from "./components/DoneScreen"
 import ReviewBar from "./components/ReviewBar"
+import JsonPanel from "./components/JsonPanel"
 import { MapFlight } from "./lib/mapFlight"
 import { paintBackground, paintFish } from "./lib/background"
 import { clamp, reducedMotion } from "./lib/utils"
 import { MOCK, INSIGHTS } from "./pipeline/mock"
-import { collectEvidence } from "./pipeline"
+import { DEMO, runAssessment, AssessError, type LlmInput } from "./pipeline"
 import type { Coords, FlightInput, RequestInput, StepId } from "./pipeline/types"
 
 type Screen = "form" | "proc" | "done"
@@ -29,7 +30,9 @@ function flightInput(tv: number): FlightInput {
 export default function App() {
   const [screen, setScreen] = useState<Screen>("form")
   const [input, setInput] = useState<RequestInput | null>(null)
-  const [refId, setRefId] = useState(MOCK.ref)
+  const [formInit, setFormInit] = useState<{ input: RequestInput; coords: Coords; picked: string } | null>(null)
+  const [serverError, setServerError] = useState<ServerError | null>(null)
+  const [formKey, setFormKey] = useState(0)
   const [mood, setMood] = useState<Mood>("idle")
   const [bubble, setBubble] = useState<{ t: string; n: number }>({ t: "", n: 0 })
   const [live, setLive] = useState("")
@@ -38,9 +41,11 @@ export default function App() {
   const [fade, setFade] = useState(false)
   const [skipped, setSkipped] = useState(reducedMotion())
   const qp = new URLSearchParams(location.search)
-  const [variant, setVariant] = useState<"A" | "B">(qp.get("ui") === "B" ? "B" : "A")
+  const [variant, setVariant] = useState<"A" | "B">(qp.get("ui") === "A" ? "A" : "B")   // B chosen by the team; ?ui=A keeps the satellite-window layout for comparison
   const [pause, setPause] = useState(qp.get("pause") !== "0")   // review mode: hold the map when it has finished processing
   const [held, setHeld] = useState(false)
+  const [doc, setDoc] = useState<LlmInput | null>(null)   // backend output: team review panel only
+  const [showJson, setShowJson] = useState(false)
   const pauseRef = useRef(pause); pauseRef.current = pause
   const run = useRef<any>(null)
   const coords = useRef<Coords>({ ...MOCK.coords })
@@ -64,22 +69,24 @@ export default function App() {
 
   // send the file on (end of the waiting screen)
   const complete = useCallback(() => {
-    setHeld(false)
-    const r = run.current; if (!r) return
-    r.data.then((d: { ref: string }) => { setRefId(d.ref) }).finally(() => setTimeout(() => { setFade(true); setTimeout(finish, 650) }, 900))
+    setHeld(false); setShowJson(false)
+    if (!run.current) return
+    setTimeout(() => { setFade(true); setTimeout(finish, 650) }, 900)
   }, [finish])
 
-  const start = (i: RequestInput, c: Coords) => {
-    coords.current = c
-    setInput(i); setScreen("proc"); setMood("working"); setStepState({}); setCurrent("Starting"); setFade(false); setHeld(false)
+  const start = (i: RequestInput, c: Coords, accessCode = "") => {
+    coords.current = c; setServerError(null)
+    setInput(i); setScreen("proc"); setMood("working"); setStepState({}); setCurrent("Starting"); setFade(false); setHeld(false); setDoc(null); setShowJson(false)
     ;MapFlight.reset(); MapFlight.update({ step: "identity", progress: 0, coords: c })
     setLive("Preparing your file")
-    run.current = { tv: Number(new URLSearchParams(location.search).get("at")) || 0, last: performance.now(), done: false, said: {}, ins: {}, st: {}, data: collectEvidence(i) }
+    const r = run.current = { tv: Number(new URLSearchParams(location.search).get("at")) || 0, last: performance.now(), done: false, said: {}, ins: {}, st: {}, live: DEMO ? "ok" : "pending", err: null as AssessError | null, input: i, coords: c }
+    // live: one backend call per submission; the waiting screen only completes when it has answered (demo flow: simulated)
+    if (!DEMO) runAssessment(i, accessCode).then((d) => { if (run.current === r) { r.live = "ok"; setDoc(d) } }).catch((e) => { if (run.current === r) { r.live = "error"; r.err = e instanceof AssessError ? e : new AssessError("service", "The assessment service had a problem. Your details are kept, please try again.") } })
     scrollTo(0, 0)
   }
 
   // dev helper: /?autorun starts the demo case immediately (optionally /?autorun&at=14 to jump ahead in the sequence)
-  useEffect(() => { if (new URLSearchParams(location.search).has("autorun")) start({ ...MOCK.sample }, { ...MOCK.coords }) }, []) // eslint-disable-line
+  useEffect(() => { if (new URLSearchParams(location.search).has("autorun")) start({ ...MOCK.sample }, { ...MOCK.coords }, "") }, []) // eslint-disable-line
 
   // single animation loop: pipeline simulation + globe on the waiting screen, background otherwise
   useEffect(() => {
@@ -90,8 +97,16 @@ export default function App() {
       raf = requestAnimationFrame(loop)
       if (screenRef.current === "proc") {
         const r = run.current
-        if (r && !r.done) {
-          r.tv = Math.min((() => { const h = location.search.match(/hold=?([\d.]*)/); return h ? (h[1] ? +h[1] : 15) : TOTAL })(), r.tv + clamp((now - r.last) / 1000, 0, 0.25)); r.last = now
+        if (r && !r.done && r.live === "error") {   // back to the form, values kept, with what went wrong
+          r.done = true; run.current = null
+          setFormInit({ input: r.input, coords: r.coords, picked: r.input.address }); setServerError({ kind: r.err.kind, message: r.err.message }); setFormKey((k) => k + 1)
+          setScreen("form"); setMood("puzzled"); setLive(r.err.message)
+          window.clearTimeout(moodTimer.current); moodTimer.current = window.setTimeout(() => setMood("idle"), 2500)
+        } else if (r && !r.done) {
+          // until the backend has answered, the timeline waits inside the last step ("Putting the file together")
+          const cap = r.live === "ok" ? TOTAL : STEP("file").start + STEP("file").dur * 0.6
+          const hold = (() => { const h = location.search.match(/hold=?([\d.]*)/); return h ? (h[1] ? +h[1] : 15) : TOTAL })()
+          r.tv = Math.min(hold, cap, r.tv + clamp((now - r.last) / 1000, 0, 0.25) * (r.live === "ok" && !DEMO ? 2.5 : 1)); r.last = now
           let changed = false
           MOCK.steps.forEach((s) => {
             const st = r.tv < s.start ? "wait" : r.tv < s.start + s.dur ? "run" : "done"
@@ -112,10 +127,9 @@ export default function App() {
           }
         }
         MapFlight.frame(now)
-      } else if (!reduced) { if (now - lastBg > 45) { lastBg = now; paintBackground(now / 1000) } paintFish(now / 1000) }
+      } else { if (!reduced && now - lastBg > 45) { lastBg = now; paintBackground(now / 1000) } paintFish(reduced) }
     }
     paintBackground(14)
-    if (reduced) paintFish(2)
     raf = requestAnimationFrame(loop)
     return () => cancelAnimationFrame(raf)
   }, [say, finish, complete])
@@ -123,7 +137,7 @@ export default function App() {
   // the companion narrates the pipeline: last finished steps, then the one running now
   const status = screen === "proc" ? { done: MOCK.steps.filter((s) => stepState[s.id] === "done").map((s) => s.label).slice(-2), now: held ? "File complete" : current, complete: held } : null
   const skip = () => { MapFlight.setStatic(true); setSkipped(true) }
-  const again = () => { setScreen("form"); setMood("idle") }
+  const again = () => { setFormInit(null); setServerError(null); setFormKey((k) => k + 1); setScreen("form"); setMood("idle") }
 
   return (
     <>
@@ -136,13 +150,13 @@ export default function App() {
           Alpenmark<span>Building insurance</span>
         </header>
         <main>
-          {screen === "form" && <FormScreen onSubmit={start} say={say} />}
-          {screen === "done" && input && <DoneScreen input={input} refId={refId} onAgain={again} />}
+          {screen === "form" && <FormScreen key={formKey} onSubmit={start} say={say} initial={formInit} serverError={serverError} />}
+          {screen === "done" && input && <DoneScreen input={input} onAgain={again} />}
         </main>
-        <footer className="foot">Background fish: the ASCII betta by @dwcminh.ascii (github.com/dwcminh/ascii-art), recoloured, used for a personal, non-commercial prototype. All companies and people shown are fictional.</footer>
       </div>
       <Flight hidden={screen !== "proc"} fade={fade} skipped={skipped} onSkip={skip}>
-        <ReviewBar variant={variant} onVariant={setVariant} pause={pause} onPause={(v) => { setPause(v); if (!v && held) complete() }} held={held} onContinue={complete} />
+        <ReviewBar variant={variant} onVariant={setVariant} pause={pause} onPause={(v) => { setPause(v); if (!v && held) complete() }} held={held} onContinue={complete} hasJson={!!doc} onJson={() => setShowJson(true)} />
+        {showJson && doc && <JsonPanel doc={doc} onClose={() => setShowJson(false)} />}
       </Flight>
       <Companion mood={mood} bubble={bubble.t} bubbleKey={bubble.n} status={status} />
     </>

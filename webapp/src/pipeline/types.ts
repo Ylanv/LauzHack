@@ -13,7 +13,8 @@ export interface Evidence {
   requires_verification: boolean
 }
 
-export interface RequestInput { contact: string; company: string; address: string }
+/** industry: key from GET /api/industries (sent as industry_type) */
+export interface RequestInput { contact: string; company: string; address: string; industry: string }
 export interface Coords { lon: number; lat: number; label: string; cantonId: number }
 export type StepId = "identity" | "building" | "hazard" | "aerial" | "industry" | "file"
 export interface StepDef { id: StepId; label: string; sub: string; start: number; dur: number }

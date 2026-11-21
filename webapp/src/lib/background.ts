@@ -1,51 +1,98 @@
 // @ts-nocheck
 // Background scene + betta sprite (ASCII betta by @dwcminh.ascii, github.com/dwcminh/ascii-art, personal / non-commercial use).
 import { rect } from "./utils"
-import { createBetta, PALETTES } from "./betta"
 const $ = (id) => document.getElementById(id)
 
 const BGW = 200, BGH = 112;
 const PLANKTON = Array.from({ length: 70 }, (_, i) => ({ x: (i * 73.13) % BGW, y: (i * 41.7) % BGH, v: 1 + (i % 5) * .5, s: i * .7 }));
-/* The fish: ASCII betta by @dwcminh.ascii (github.com/dwcminh/ascii-art), ported to a live canvas renderer (see betta.ts).
-   Three of them, one per palette colour, swimming slowly in the free space left and right of the card (never behind it).
-   Each is rendered at about 20-30 fps with soft trails into its own offscreen canvas, one render per animation frame at most. */
-const FISH_SPEC = [
-  { pal: "blue", rows: 40, size: 0.62, side: "left", cy: 0.5, ax: 0.1, ay: 0.06, ph: 0.0, off: 0 },
-  { pal: "koi", rows: 32, size: 0.46, side: "right", cy: 0.3, ax: 0.1, ay: 0.07, ph: 2.1, off: 4.7 },
-  { pal: "lotus", rows: 26, size: 0.34, side: "right", cy: 0.74, ax: 0.1, ay: 0.05, ph: 4.2, off: 9.3 },
-]
-const SPEED = 1.7   // swim speed relative to the original timing
-const FISH = { list: null, turn: 0 }
-export function paintFish(t) {
-  const cv = $("fish"); if (!cv) return
-  if (!FISH.list) FISH.list = FISH_SPEC.map((s) => {
-    const betta = createBetta({ cols: Math.round(s.rows * 1.1), rows: s.rows, cw: 10, ch: 14, palette: PALETTES[s.pal] })   // coarse grid, small glyphs: airy like the original
-    const off = document.createElement("canvas"); off.width = betta.width; off.height = betta.height
-    const sil = document.createElement("canvas"); sil.width = off.width; sil.height = off.height
-    return { s, betta, off, sil, octx: off.getContext("2d"), sctx: sil.getContext("2d"), last: -1 }
-  })
-  if (cv.width !== innerWidth || cv.height !== innerHeight) { cv.width = innerWidth; cv.height = innerHeight }
-  // one render per call, round robin, only if that fish is due (always once before its first draw)
-  const k = FISH.turn++ % FISH.list.length, f = FISH.list[k]
-  if (f.last < 0 || t - f.last >= 1 / 30 || t < f.last) { f.betta.draw(f.octx, (t + f.s.off) * SPEED); f.last = t
-    // dark silhouette of the same frame, drawn slightly offset behind the fish so its contours stand out from the background
-    const sc = f.sctx; sc.globalCompositeOperation = "source-over"; sc.clearRect(0, 0, f.sil.width, f.sil.height); sc.drawImage(f.off, 0, 0)
-    sc.globalCompositeOperation = "source-in"; sc.fillStyle = "rgba(28,34,80,.55)"; sc.fillRect(0, 0, f.sil.width, f.sil.height) }
-  // free space: left and right of the card
-  const card = document.querySelector(".card"), r = card ? card.getBoundingClientRect() : { left: innerWidth / 2 - 280, right: innerWidth / 2 + 280 }
-  const bands = { left: [0, Math.max(0, r.left - 12)], right: [Math.min(innerWidth, r.right + 12), innerWidth] }
-  const c = cv.getContext("2d"); c.clearRect(0, 0, cv.width, cv.height); c.imageSmoothingEnabled = true
-  FISH.list.forEach(({ s, off, sil }) => {
-    const [x0, x1] = bands[s.side], bw = x1 - x0, asp = off.width / off.height
-    if (bw < 120) return                                          // no free space (narrow screen): no fish rather than a fish behind the form
-    const H = Math.min(innerHeight * s.size, (bw * 1.1) / asp), W = H * asp
-    const cx = (x0 + x1) / 2 + Math.sin(t * 0.17 + s.ph) * Math.max(0, bw - W) * 0.5, cyy = innerHeight * s.cy + Math.sin(t * 0.24 + s.ph * 1.7) * innerHeight * s.ay
-    const o = 0.7
-    ;[[-o, 0], [o, 0], [0, -o], [0, o]].forEach(([dx, dy]) => c.drawImage(sil, cx - W / 2 + dx, cyy - H / 2 + dy, W, H))
-    c.drawImage(off, cx - W / 2, cyy - H / 2, W, H)
-  })
+/* The fish: the original ASCII betta by @dwcminh.ascii (github.com/dwcminh/ascii-art/tree/main/BETTA-FISH), not a re-implementation.
+   It plays the repo's own reel.mp4 (30 fps), cropped to the fish (the HUD and the code panel are left out), with black turned into
+   transparency so it swims on the light background. Fallback: the README's preview.gif (6 fps).
+   The media are NOT in git (the licence does not allow reposting them): they are read from public/original/ when present;
+   without them there is simply no fish. */
+const SRC = {
+  video: { url: "/original/reel.mp4", crop: [0, 52, 1080, 1100] },       // x, y, w, h in the 1080x1920 reel
+  gif: { url: "/original/preview.gif", crop: [0, 18, 300, 298] },       // in the 300x360 gif
 }
-export function paintBackground(t) {
+const SWIM = { x: null, y: 0, dir: 1, lane: 0, last: 0 }
+const ORIG = { state: "idle", kind: "", raw: null, crop: null, dirty: false, out: null, octx: null, dec: null, n: 0, i: 0, next: 0, busy: false, rawCtx: null }
+
+function startVideo() {
+  const v = document.createElement("video")
+  Object.assign(v, { src: SRC.video.url, muted: true, loop: true, playsInline: true, autoplay: true, preload: "auto" })
+  v.setAttribute("aria-hidden", "true"); v.style.cssText = "position:fixed;left:0;top:0;width:2px;height:2px;opacity:0;pointer-events:none"
+  v.addEventListener("error", () => { v.remove(); startGif() }, { once: true })
+  v.addEventListener("playing", () => {
+    ORIG.state = "ready"; ORIG.kind = "video"; ORIG.raw = v; ORIG.crop = SRC.video.crop; ORIG.dirty = true
+    if (v.requestVideoFrameCallback) { const on = () => { ORIG.dirty = true; v.requestVideoFrameCallback(on) }; v.requestVideoFrameCallback(on) }
+  }, { once: true })
+  document.body.appendChild(v)
+  v.play().catch(() => {})
+}
+async function startGif() {
+  try {
+    if (!("ImageDecoder" in window)) throw new Error("no ImageDecoder")
+    const r = await fetch(SRC.gif.url); if (!r.ok || !(r.headers.get("content-type") || "").includes("gif")) throw new Error("no gif")
+    const dec = new ImageDecoder({ data: await r.arrayBuffer(), type: "image/gif" }); await dec.tracks.ready; await dec.completed
+    const raw = document.createElement("canvas"); raw.width = 300; raw.height = 360
+    Object.assign(ORIG, { dec, n: dec.tracks.selectedTrack.frameCount, raw, rawCtx: raw.getContext("2d"), crop: SRC.gif.crop, kind: "gif", state: "ready" })
+  } catch { ORIG.state = "none" }
+}
+async function gifFrame(now) {
+  ORIG.busy = true
+  try { const { image } = await ORIG.dec.decode({ frameIndex: ORIG.i }); ORIG.rawCtx.clearRect(0, 0, 300, 360); ORIG.rawCtx.drawImage(image, 0, 0); ORIG.next = now + (image.duration ? image.duration / 1000 : 160); image.close(); ORIG.i = (ORIG.i + 1) % ORIG.n; ORIG.dirty = true }
+  finally { ORIG.busy = false }
+}
+/** scale the current frame to its on-screen size (device pixels), then light-on-black -> the same colour with its brightness as opacity */
+function keyFrame(w, h) {
+  if (!ORIG.out) { ORIG.out = document.createElement("canvas"); ORIG.octx = ORIG.out.getContext("2d", { willReadFrequently: true }) }
+  const o = ORIG.out, c = ORIG.octx
+  if (o.width !== w || o.height !== h) { o.width = w; o.height = h }
+  const [sx, sy, sw, sh] = ORIG.crop
+  c.imageSmoothingEnabled = true; c.imageSmoothingQuality = "high"; c.clearRect(0, 0, w, h); c.drawImage(ORIG.raw, sx, sy, sw, sh, 0, 0, w, h)
+  const d = c.getImageData(0, 0, w, h), p = d.data
+  for (let k = 0; k < p.length; k += 4) {
+    const m = Math.max(p[k], p[k + 1], p[k + 2])
+    if (m < 10) { p[k + 3] = 0; continue }
+    const s = 255 / m; p[k] *= s; p[k + 1] *= s; p[k + 2] *= s; p[k + 3] = Math.min(255, m * 1.15)
+  }
+  c.putImageData(d, 0, 0)
+}
+
+/** still: reduced motion, keep the first frame shown and do not animate */
+export function paintFish(still = false) {
+  const cv = $("fish"); if (!cv) return
+  if (ORIG.state === "idle") { ORIG.state = "loading"; startVideo() }
+  const now = performance.now()
+  if (ORIG.kind === "gif" && !ORIG.busy && now >= ORIG.next && !(still && ORIG.out)) gifFrame(now)
+  if (ORIG.kind === "video" && still && ORIG.out && !ORIG.raw.paused) ORIG.raw.pause()
+  const dpr = Math.min(2, devicePixelRatio || 1), pw = Math.round(innerWidth * dpr), ph = Math.round(innerHeight * dpr)
+  const c = cv.getContext("2d")
+  if (cv.width !== pw || cv.height !== ph) { cv.width = pw; cv.height = ph; ORIG.dirty = true }
+  if (ORIG.state !== "ready") return
+  // one fish swimming across the whole screen, back and forth at a new height each time. Slow in the open, quick behind the card:
+  // it never lingers under the form.
+  const [, , sw, sh] = ORIG.crop, asp = sw / sh
+  const H = Math.min(innerHeight * 0.72, 640), W = H * asp
+  const card = document.querySelector(".card"), r = card ? card.getBoundingClientRect() : null
+  const dt = Math.min(0.1, (now - (SWIM.last || now)) / 1000); SWIM.last = now
+  if (SWIM.x === null) { SWIM.x = r ? Math.max(W / 2 + 10, r.left / 2) : innerWidth * 0.25; SWIM.y = innerHeight / 2 }
+  const behind = r && SWIM.x + W * 0.3 > r.left && SWIM.x - W * 0.3 < r.right
+  if (!still) SWIM.x += SWIM.dir * (behind ? 420 : 38) * dt
+  if (SWIM.x > innerWidth + W / 2 || SWIM.x < -W / 2) {   // off screen: turn back at another height
+    SWIM.dir *= -1; SWIM.lane = (SWIM.lane + 1) % 3
+    SWIM.x = SWIM.dir > 0 ? -W / 2 : innerWidth + W / 2
+  }
+  const ty = innerHeight * [0.5, 0.36, 0.64][SWIM.lane]; SWIM.y += (ty - SWIM.y) * Math.min(1, dt * 0.5)
+  const x = SWIM.x - W / 2, y = SWIM.y - H / 2 + Math.sin(now / 2400) * innerHeight * 0.03
+  const w = Math.round(W * dpr), h = Math.round(H * dpr)
+  if (ORIG.dirty || !ORIG.out || ORIG.out.width !== w) { ORIG.dirty = false; keyFrame(w, h) }
+  c.setTransform(1, 0, 0, 1, 0, 0); c.clearRect(0, 0, cv.width, cv.height)
+  c.shadowColor = "rgba(28,34,80,.4)"; c.shadowBlur = 1.5 * dpr   // a hair of shade so pale letters still read on the light background
+  if (SWIM.dir > 0) { c.translate(Math.round((x + W) * dpr), Math.round(y * dpr)); c.scale(-1, 1); c.drawImage(ORIG.out, 0, 0) }   // the reel's fish faces left: mirrored when it swims right
+  else c.drawImage(ORIG.out, Math.round(x * dpr), Math.round(y * dpr))
+  c.setTransform(1, 0, 0, 1, 0, 0); c.shadowColor = "transparent"
+}export function paintBackground(t) {
   const c = $("bg").getContext("2d");
   ["#ede8f5", "#e9e7f6", "#e5e5f6", "#e1e4f6", "#dde3f6", "#d9e1f5"].forEach((col, i) => rect(c, 0, i * 19, BGW, 19, col));
   [[0,24,10],[24,22,17],[46,20,25],[150,20,14],[170,16,24],[186,14,11]].forEach(([x, w, h]) => {   // soft cubes, a nod to the reference

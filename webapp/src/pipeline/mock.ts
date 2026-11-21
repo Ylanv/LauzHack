@@ -2,9 +2,8 @@ import type { Insight, StepDef, StepId } from "./types"
 
 /** All mock data lives here, so the demo case works fully offline. */
 export const MOCK = {
-  ref: "SP-2026-0417",
-  sample: { contact: "Claire Moret", company: "Valtherm Composants SA", address: "Rue de l'Industrie 21, 1950 Sion" },
-  coords: { lon: 7.36333, lat: 46.22724, label: "Valais (VS)", cantonId: 23 },
+  sample: { contact: "Marie Dupont", company: "CMDS SA", address: "Rue du Champ-Blanchod 7, 1228 Plan-les-Ouates", industry: "metalworking" },
+  coords: { lon: 6.109486, lat: 46.166565, label: "Geneva (GE)", cantonId: 25 },
   // dur is simulated seconds; steps with the same start run in parallel
   steps: [
     { id: "identity", label: "Checking the company", sub: "Commercial register and federal address register", start: 0, dur: 2.6 },
@@ -25,3 +24,12 @@ export const INSIGHTS: Insight[] = [
   { id: "wood", at: ["hazard", 0.8], kind: "forest", e: -190, n: 160, dx: -250, dy: -90, kicker: "Vegetation", title: "Wooded area close to the west", note: "Worth a look for wildfire and storm-damage exposure." },
   { id: "site", at: ["industry", 0.6], kind: "info", kicker: "Public information", title: "Company website lists this address", note: "Source: company website, not the building register." },
 ]
+
+/** Used only in the explicit demo flow (no backend). Same keys and labels as the backend's GET /api/industries. */
+export const DEMO_INDUSTRIES = [
+  ["woodworking", "Woodworking / carpentry / joinery"], ["metalworking", "Metalworking / machining / locksmith"],
+  ["surface_treatment", "Surface treatment / electroplating / industrial painting"], ["bakery_food", "Bakery / pastry / food production"],
+  ["meat_dairy", "Meat / dairy / cheese processing"], ["printing", "Printing / packaging"], ["car_repair", "Car repair / body shop"],
+  ["plastics_chemicals", "Plastics / chemicals"], ["warehouse_logistics", "Warehouse / logistics"],
+  ["precision_electronics", "Watchmaking / precision / electronics"], ["textile", "Textile / laundry / dry cleaning"], ["other", "Other industrial or craft activity"],
+].map(([key, label]) => ({ key, label }))

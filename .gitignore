@@ -12,3 +12,6 @@ photos_test/
 
 # Synthetic benchmark dataset: local only, never pushed
 dataset/
+
+# Report folders produced by python -m src.report (may hold client data), read by webapp/dashboard.html: local only
+reports/

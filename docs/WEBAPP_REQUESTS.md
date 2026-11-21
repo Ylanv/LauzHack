@@ -28,7 +28,7 @@ Read [WEBAPP.md](WEBAPP.md) first. Then add **one block per request** below, cop
 - When: On the form, before submission. The CMDS SA demo should preselect metalworking.
 - Must not: Infer the client's answer from the company name.
 - Priority: must
-- Status: open
+- Status: done in webapp/ (2026-11-21), see WEBAPP.md
 
 ### Identify the Geneva business premises
 - Owner: Backend / main
@@ -38,7 +38,7 @@ Read [WEBAPP.md](WEBAPP.md) first. Then add **one block per request** below, cop
 - When: During address selection and before submission.
 - Must not: Accept a town alone or silently substitute a nearby street number.
 - Priority: must
-- Status: open
+- Status: done in webapp/ (2026-11-21), see WEBAPP.md
 
 ### Run the live assessment once per submission
 - Owner: Backend / main
@@ -48,7 +48,7 @@ Read [WEBAPP.md](WEBAPP.md) first. Then add **one block per request** below, cop
 - When: Start on submit and tie completion to the response. Keep simulated completion in the explicit demo flow.
 - Must not: Fall back to a mock success after four seconds, display a fabricated live reference, or expose the underwriting document to the client.
 - Priority: must
-- Status: open
+- Status: done in webapp/ (2026-11-21), see WEBAPP.md
 
 ### Recover from a rejected or unavailable assessment
 - Owner: Backend / main
@@ -58,4 +58,4 @@ Read [WEBAPP.md](WEBAPP.md) first. Then add **one block per request** below, cop
 - When: Check access requirements before the live POST and handle errors before showing confirmation.
 - Must not: Embed the team's access code in the frontend bundle or retry a paid request automatically.
 - Priority: must
-- Status: open
+- Status: done in webapp/ (2026-11-21), see WEBAPP.md
