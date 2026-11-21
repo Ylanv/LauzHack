@@ -9,3 +9,5 @@ __pycache__/
 *.pyc
 .vercel/
 photos_test/
+# Teammate web app (Vite/React) deployed separately for now
+webapp/
