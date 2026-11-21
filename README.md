@@ -158,8 +158,6 @@ src/llm.py               seul point d'entrée LLM : json_schema, retry, cache, t
 src/validate.py          validation de llm_input.json
 src/main.py              API FastAPI (Vercel)
 scripts/build_llm_input.py   un llm_input.json
-scripts/llm_input_matrix.py  un lot d'entreprises → tableau de couverture des features
-scripts/probe_sources.py     debug : toutes les sources publiques sur une adresse
 examples/                    llm_input exemple (complet + version LLM)
 schemas/FEATURE/llm_input.v2.schema.json  contrat de sortie
 ```

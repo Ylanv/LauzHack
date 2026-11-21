@@ -97,6 +97,9 @@ def validate(report: dict | None, bundle: dict) -> list[dict]:
         if h.get("peril") in REGULATED_PERILS and h.get("pricing_role") == "potential_individual_pricing_input":
             issues.append(_issue("error", "regulated_peril_priced", f"hazard_interpretations/{n}/pricing_role",
                                  f"{h['peril']} belongs to the regulated natural-hazards cover: no individual pricing input"))
+        elif h.get("peril") in REGULATED_PERILS and h.get("pricing_role") == "coverage_dependent":
+            issues.append(_issue("warning", "regulated_peril_role", f"hazard_interpretations/{n}/pricing_role",
+                                 f"{h['peril']} is regulated natural-hazards cover: expected regulated_component_underwriting_only or not_assessed"))
     vc = report.get("valuation_commentary") or {}
     check(vc.get("fact_ids"), facts, "valuation_commentary/fact_ids", "fact_id")
     for n, ve in enumerate(report.get("visual_evidence") or []):

@@ -56,7 +56,7 @@ def _usage_fields(usage) -> tuple[int, int, int, float | None]:
     return usage.prompt_tokens or 0, usage.completion_tokens or 0, reasoning, (float(cost) if cost is not None else None)
 
 
-RETRY_DELAYS_S = (1, 3)  # waits before the 2nd and 3rd attempt on HTTP 429 (provider rate limit)
+RETRY_DELAYS_S = (2, 6, 15)  # waits before attempts 2-4 on HTTP 429: the provider throttled > 4 s in a real series
 
 
 def _create_with_backoff(**kwargs):

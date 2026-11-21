@@ -1,6 +1,6 @@
 """LLM report generation: COMBINED_FEATURE → OUTPUT JSON, with token/cost accounting and a spending cap.
 
-Prompt = the frozen kit prompt (reporting/REPORT_WRITER_PROMPT.md) as system message + output schema + evidence
+Prompt = the kit prompt (reporting/REPORT_WRITER_PROMPT.md) as system message + output schema + evidence
 bundle (indented JSON) as user message — the same prompt that was validated in the model benchmark.
 The model is chosen by config id from models/configs.json (provider, model id, prices); default REPORT_MODEL.
 """
