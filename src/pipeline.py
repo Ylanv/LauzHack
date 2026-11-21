@@ -76,12 +76,12 @@ def _geneva(pdata: dict) -> dict:
     """SITG data; rejects housing / mixed-use buildings (the Geneva cadastre is authoritative)."""
     regbl, footprint = pdata.get("regbl", {}).get("fields", {}), pdata.get("footprint", {})
     try:
-        ge = {"establishment": geneva.establishment((pdata.get("zefix") or {}).get("uid"))}
+        ge = {"establishment": geneva.establishment((pdata.get("zefix") or {}).get("uid"), regbl.get("egid"))}
         ge.update(geneva.building(regbl.get("egid"), footprint.get("geometry")))
     except Exception as e:  # noqa: BLE001
         return {"status": "error", "error": str(e)[:200]}
     cls = (ge.get("building") or {}).get("nomen_classe") or ""
-    if cls.startswith(("Mixte", "Logement")):
+    if cls.startswith(("Mixte", "Habitation", "Logement")):  # official classes: Habitation, Mixte: logements/…
         raise InputError(f"Out of scope: the Geneva cadastre classifies this building as '{cls}'. "
                          "AXA Smart Property covers companies with their own activity building.")
     return ge

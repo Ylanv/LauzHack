@@ -12,8 +12,11 @@ Tested on Geneva SMEs — what each layer adds to the 25 features:
 - REG_ENTREPRISE_ETABLISSEMENT (in footprint) → other companies in the same building (shared building)
 """
 
+import gzip
+import json
 import re
 from datetime import datetime, timezone
+from pathlib import Path
 
 import httpx
 
@@ -37,6 +40,22 @@ NOGA_HAZARDS = {
     "9601": ("dry cleaning: solvents", False), "4334": ("painting: paints, solvents", False),
     "4321": ("electrical installation", False), "4322": ("plumbing / heating installation: soldering", True),
 }
+
+
+EXTRACT = Path(__file__).resolve().parent.parent / "data" / "sitg_ge_extract.json.gz"
+_extract_cache = None
+
+
+def _extract() -> dict:
+    """Bundled SITG extract (activity buildings), built by scripts/build_sitg_extract.py. SITG blocks cloud IPs
+    (Vercel), so in production this file is the source; live queries are the fallback for buildings not in it."""
+    global _extract_cache
+    if _extract_cache is None:
+        try:
+            _extract_cache = json.loads(gzip.decompress(EXTRACT.read_bytes()))
+        except (OSError, ValueError):
+            _extract_cache = {}
+    return _extract_cache
 
 
 def _q(service, params, layer=0):
@@ -107,8 +126,11 @@ def norm_company(name: str) -> str:
 
 def _occupants(footprint_geojson) -> list[dict]:
     """Companies registered inside the building footprint (+5 m: register points sit on the address/entrance)."""
-    rows = _in_footprint("REG_ENTREPRISE_ETABLISSEMENT", footprint_geojson,
-                         "NOM,RAISON_SOCIALE,NUM_IDE,CODE_NOGA,BRANCHE,TAILLE", buffer_m=5)
+    return _dedupe_occupants(_in_footprint("REG_ENTREPRISE_ETABLISSEMENT", footprint_geojson,
+                                           "NOM,RAISON_SOCIALE,NUM_IDE,CODE_NOGA,BRANCHE,TAILLE", buffer_m=5))
+
+
+def _dedupe_occupants(rows) -> list[dict]:
     seen, out = set(), []
     for a in rows:
         name = a.get("RAISON_SOCIALE") or a.get("NOM")
@@ -121,7 +143,12 @@ def _occupants(footprint_geojson) -> list[dict]:
 
 
 def building(egid, footprint_geojson=None) -> dict:
-    out = {"status": "ok"}
+    rec = (_extract().get("buildings") or {}).get(str(int(egid))) if egid else None
+    if rec:  # bundled extract: 0 network call, works on Vercel
+        out = {"status": "ok", "source": f"sitg_extract ({_extract().get('generated_at', '?')[:10]})"}
+        out["occupants"] = _dedupe_occupants(rec["establishments"])
+        return _process(out, rec["horsol"], rec["toit"], rec["idc"], rec["boilers"], rec["permits"], rec["polluted_sites"])
+    out = {"status": "ok", "source": "sitg_live"}
     # The 7 SITG layers are independent → query them in parallel.
     from concurrent.futures import ThreadPoolExecutor
     w = f"EGID={int(egid)}" if egid else "1=0"
@@ -136,6 +163,11 @@ def building(egid, footprint_geojson=None) -> dict:
         h, t, i, b = _result(fh, []), _result(ft, []), _result(fi, []), _result(fb, [])
         pol, p = _result(fpol, []), _result(fp, None)
         out["occupants"] = _result(focc, [])
+    return _process(out, h, t, i, b, p, pol)
+
+
+def _process(out, h, t, i, b, p, pol) -> dict:
+    """Same processing for the bundled extract and live queries (same ArcGIS attribute format)."""
     if h:
         a = h[0]
         out["building"] = {k.lower(): a.get(k) for k in ("DESTINATION", "NOMEN_CLASSE", "EPOQUE_CONSTRUCTION", "ANNEE_CONSTRUCTION",
@@ -165,11 +197,20 @@ def building(egid, footprint_geojson=None) -> dict:
     return out
 
 
-def establishment(uid) -> dict:
+def establishment(uid, egid=None) -> dict:
     """Cantonal register of establishments, by UID (stored without punctuation: CHE143634449)."""
     if not uid:
         return {"status": "empty"}
-    rows = _q("REG_ENTREPRISE_ETABLISSEMENT", {"where": f"NUM_IDE='{re.sub(r'[^A-Z0-9]', '', uid.upper())}'"})
+    key = re.sub(r"[^A-Z0-9]", "", uid.upper())
+    a = dict((_extract().get("establishments_by_uid") or {}).get(key) or {})
+    if a:
+        if not a.get("SITE_INTERNET") and egid:  # website often on the twin row (same name, no UID) in the same building
+            rec = (_extract().get("buildings") or {}).get(str(int(egid))) or {}
+            me = norm_company(a.get("RAISON_SOCIALE") or a.get("NOM"))
+            a["SITE_INTERNET"] = next((x["SITE_INTERNET"] for x in rec.get("establishments", [])
+                                       if x.get("SITE_INTERNET") and norm_company(x.get("RAISON_SOCIALE") or x.get("NOM")) == me), None)
+        return _establishment_out(a)
+    rows = _q("REG_ENTREPRISE_ETABLISSEMENT", {"where": f"NUM_IDE='{key}'"})
     if not rows:
         return {"status": "empty"}
     a = rows[0]
@@ -181,6 +222,10 @@ def establishment(uid) -> dict:
             twins = _q("REG_ENTREPRISE_ETABLISSEMENT", {"where": f"ADRESSE='{addr}' AND UPPER(NOM) LIKE '{first[0].upper()}%'",
                                                          "outFields": "SITE_INTERNET"})
             a["SITE_INTERNET"] = next((t["SITE_INTERNET"] for t in twins if t.get("SITE_INTERNET")), None)
+    return _establishment_out(a)
+
+
+def _establishment_out(a) -> dict:
     noga = a.get("CODE_NOGA")
     hz = noga_hazard(noga)
     return {"status": "ok", "noga_code": noga, "branch": a.get("BRANCHE"), "activity_detail": a.get("ACTIVITE_DETAIL"),

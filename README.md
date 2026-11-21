@@ -164,6 +164,14 @@ examples/                    llm_input exemple (complet + version LLM)
 schemas/llm_input.schema.json  contrat de sortie
 ```
 
+## Données SITG embarquées
+
+Le serveur SITG (`vector.sitg.ge.ch`) **coupe les connexions venant des clouds** (Vercel/AWS) — vérifié depuis Vercel ; geo.admin.ch, geodienste.ch et Zefix répondent normalement. Les couches genevoises des **7 077 bâtiments « Activité »** sont donc embarquées dans `data/sitg_ge_extract.json.gz` (3,1 Mo) : cadastre, pente du toit, indice énergétique, chaudières, autorisations de construire, sites pollués, établissements (jointure spatiale sur l'emprise), registre par UID.
+
+- La pipeline lit l'extrait d'abord (0 appel réseau), puis le SITG en direct pour les bâtiments absents (fonctionne en local, pas sur Vercel).
+- Données figées à la date de génération (indiquée dans `evidence.public_data.geneva.source`). **Régénérer** depuis un poste non bloqué : `python scripts/build_sitg_extract.py` (~3 min).
+- Vérifié : résultats identiques à l'interrogation directe (CMDS, Nutrifrais, CBM, RHODIOR).
+
 ## Hébergement
 
 **En ligne : https://axa-smart-property.vercel.app** — page de démo (formulaire → features, photos, JSON pour le LLM). L'API demande le **code d'accès** de l'équipe (header `X-Access-Code`, champ « Code d'accès » de la page) car elle consomme les crédits OpenRouter et Google ; le code est dans la variable Vercel `ACCESS_CODE`.
