@@ -1,0 +1,448 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Ylanv/LauzHack/schemas/report.schema.json",
+  "title": "AXA Smart Property — Property Risk Report",
+  "description": "Contract between agent, FastAPI backend and frontend. Every field is required; unavailable values are null or \"unknown\", never omitted. Unknown never means zero or absent.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "report_id",
+    "generated_at",
+    "request",
+    "company",
+    "building",
+    "aerial",
+    "valuations",
+    "external_hazards",
+    "fire_exposure",
+    "protection_systems",
+    "maintenance",
+    "underwriting",
+    "sources",
+    "metrics"
+  ],
+  "properties": {
+    "schema_version": { "const": "1.0" },
+    "report_id": { "type": "string" },
+    "generated_at": { "type": "string", "format": "date-time" },
+
+    "request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["client_name", "company_legal_name", "address"],
+      "properties": {
+        "client_name": { "type": "string" },
+        "company_legal_name": { "type": "string" },
+        "address": { "type": "string" }
+      }
+    },
+
+    "company": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "registered_name",
+        "uid",
+        "legal_form",
+        "registered_seat",
+        "business_sector",
+        "noga_code",
+        "site_activities",
+        "annual_revenue_chf",
+        "occupies_building"
+      ],
+      "properties": {
+        "registered_name": { "type": ["string", "null"], "description": "Name as found in Zefix." },
+        "uid": { "type": ["string", "null"], "pattern": "^CHE-\\d{3}\\.\\d{3}\\.\\d{3}$" },
+        "legal_form": { "type": ["string", "null"] },
+        "registered_seat": { "type": ["string", "null"] },
+        "business_sector": { "type": ["string", "null"] },
+        "noga_code": { "type": ["string", "null"], "description": "NOGA 2008 code, e.g. 25.61." },
+        "site_activities": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Activities documented for THIS address, not the company in general."
+        },
+        "annual_revenue_chf": {
+          "type": ["number", "null"],
+          "minimum": 0,
+          "description": "Describes the business, not the building. Usually null for private Swiss companies."
+        },
+        "occupies_building": {
+          "$ref": "#/$defs/presence",
+          "description": "Whether the company actually occupies the building. Zefix seat alone is not proof."
+        }
+      }
+    },
+
+    "building": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "egid",
+        "resolved_address",
+        "coordinates",
+        "canton",
+        "commune",
+        "category",
+        "construction_year",
+        "age_years",
+        "floor_count",
+        "footprint_m2",
+        "floor_area_m2",
+        "height_m",
+        "roof_shape",
+        "terrain_altitude_m",
+        "cantonal_insurance_regime"
+      ],
+      "properties": {
+        "egid": { "type": ["string", "null"] },
+        "resolved_address": { "type": ["string", "null"] },
+        "coordinates": {
+          "type": ["object", "null"],
+          "additionalProperties": false,
+          "required": ["lv95_e", "lv95_n", "lat", "lon"],
+          "properties": {
+            "lv95_e": { "type": "number" },
+            "lv95_n": { "type": "number" },
+            "lat": { "type": "number" },
+            "lon": { "type": "number" }
+          }
+        },
+        "canton": { "type": ["string", "null"], "pattern": "^[A-Z]{2}$" },
+        "commune": { "type": ["string", "null"] },
+        "category": { "type": ["string", "null"], "description": "RegBL gkat, human-readable." },
+        "construction_year": { "type": ["integer", "null"], "minimum": 1000, "maximum": 2100 },
+        "age_years": { "type": ["integer", "null"], "minimum": 0 },
+        "floor_count": { "type": ["integer", "null"], "minimum": 0, "description": "RegBL gastw." },
+        "footprint_m2": { "type": ["number", "null"], "minimum": 0, "description": "Ground footprint. Not floor area." },
+        "floor_area_m2": { "type": ["number", "null"], "minimum": 0, "description": "Total floor area, only if a suitable source exists." },
+        "height_m": { "type": ["number", "null"], "minimum": 0 },
+        "roof_shape": { "type": ["string", "null"] },
+        "terrain_altitude_m": { "type": ["number", "null"] },
+        "cantonal_insurance_regime": {
+          "type": "string",
+          "enum": ["cantonal_monopoly", "private_market", "unknown"],
+          "description": "Business rule from canton: cantonal building insurer (KGV/ECA) vs private market."
+        }
+      }
+    },
+
+    "aerial": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "image_url",
+        "image_date",
+        "attribution",
+        "pv_panels",
+        "roof_equipment",
+        "vegetation_nearby",
+        "neighbour_min_distance_m",
+        "observations"
+      ],
+      "properties": {
+        "image_url": { "type": ["string", "null"] },
+        "image_date": { "type": ["string", "null"] },
+        "attribution": { "type": ["string", "null"] },
+        "pv_panels": { "$ref": "#/$defs/presence" },
+        "roof_equipment": { "type": "array", "items": { "type": "string" } },
+        "vegetation_nearby": { "$ref": "#/$defs/presence" },
+        "neighbour_min_distance_m": { "type": ["number", "null"], "minimum": 0, "description": "From geometry, not vision." },
+        "observations": { "type": ["string", "null"], "description": "1-2 sentences. Visible facts only." }
+      }
+    },
+
+    "valuations": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["estimated_market_value", "estimated_reconstruction_cost"],
+      "properties": {
+        "estimated_market_value": {
+          "$ref": "#/$defs/money_estimate",
+          "description": "Includes land. Secondary for building insurance."
+        },
+        "estimated_reconstruction_cost": {
+          "$ref": "#/$defs/money_estimate",
+          "description": "Excludes land and machinery. Relevant basis for building insurance (valeur à neuf)."
+        }
+      }
+    },
+
+    "external_hazards": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "river_flood",
+        "surface_runoff",
+        "earthquake",
+        "hail",
+        "windstorm",
+        "heavy_snow",
+        "lightning",
+        "landslide",
+        "rockfall",
+        "avalanche",
+        "wildfire"
+      ],
+      "properties": {
+        "river_flood": { "$ref": "#/$defs/hazard" },
+        "surface_runoff": { "$ref": "#/$defs/hazard" },
+        "earthquake": { "$ref": "#/$defs/hazard" },
+        "hail": { "$ref": "#/$defs/hazard" },
+        "windstorm": { "$ref": "#/$defs/hazard" },
+        "heavy_snow": { "$ref": "#/$defs/hazard" },
+        "lightning": { "$ref": "#/$defs/hazard" },
+        "landslide": { "$ref": "#/$defs/hazard" },
+        "rockfall": { "$ref": "#/$defs/hazard" },
+        "avalanche": { "$ref": "#/$defs/hazard" },
+        "wildfire": { "$ref": "#/$defs/hazard" }
+      }
+    },
+
+    "fire_exposure": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "preliminary_level",
+        "gas_installations",
+        "high_temperature_processes",
+        "flammable_storage",
+        "hazardous_chemicals",
+        "industrial_processes",
+        "neighbouring_hazards",
+        "explanation"
+      ],
+      "properties": {
+        "preliminary_level": { "$ref": "#/$defs/level" },
+        "gas_installations": { "$ref": "#/$defs/presence" },
+        "high_temperature_processes": { "$ref": "#/$defs/presence" },
+        "flammable_storage": { "$ref": "#/$defs/presence" },
+        "hazardous_chemicals": { "$ref": "#/$defs/presence" },
+        "industrial_processes": { "type": "array", "items": { "type": "string" } },
+        "neighbouring_hazards": { "type": "array", "items": { "type": "string" } },
+        "explanation": { "type": ["string", "null"] }
+      }
+    },
+
+    "protection_systems": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/protection_system" },
+      "description": "Always contains at least sprinklers, fire_detection, fire_compartmentation, lightning_protection, flood_barrier (presence may be unknown)."
+    },
+
+    "maintenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["assessment_scope", "potential_issues", "note"],
+      "properties": {
+        "assessment_scope": {
+          "type": "string",
+          "enum": ["none", "limited_visual_review", "document_review", "inspection_report"]
+        },
+        "potential_issues": { "type": "array", "items": { "$ref": "#/$defs/repair_flag" } },
+        "note": { "type": ["string", "null"] }
+      }
+    },
+
+    "underwriting": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["main_findings", "aggravating_factors", "missing_information", "conflicts", "recommendations"],
+      "properties": {
+        "main_findings": { "type": "array", "items": { "type": "string" } },
+        "aggravating_factors": { "type": "array", "items": { "type": "string" } },
+        "missing_information": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Critical info that could not be found, e.g. sprinklers, claims history."
+        },
+        "conflicts": { "type": "array", "items": { "$ref": "#/$defs/conflict" } },
+        "recommendations": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Priority checks for the underwriter. No premium, no actuarial score."
+        }
+      }
+    },
+
+    "sources": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/source" }
+    },
+
+    "metrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["fields_applicable", "fields_filled", "tool_calls", "tokens_input", "tokens_output", "cost_chf", "duration_ms"],
+      "properties": {
+        "fields_applicable": { "type": "integer", "minimum": 0 },
+        "fields_filled": { "type": "integer", "minimum": 0 },
+        "tool_calls": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["tool", "duration_ms", "tokens_input", "tokens_output", "cache_hit"],
+            "properties": {
+              "tool": { "type": "string" },
+              "duration_ms": { "type": "integer", "minimum": 0 },
+              "tokens_input": { "type": "integer", "minimum": 0 },
+              "tokens_output": { "type": "integer", "minimum": 0 },
+              "cache_hit": { "type": "boolean" }
+            }
+          }
+        },
+        "tokens_input": { "type": "integer", "minimum": 0 },
+        "tokens_output": { "type": "integer", "minimum": 0 },
+        "cost_chf": { "type": "number", "minimum": 0 },
+        "duration_ms": { "type": "integer", "minimum": 0 }
+      }
+    }
+  },
+
+  "$defs": {
+    "level": {
+      "type": "string",
+      "enum": ["low", "moderate", "high", "very_high", "unknown"]
+    },
+    "presence": {
+      "type": "string",
+      "enum": ["confirmed_present", "confirmed_absent", "possible", "unknown"],
+      "description": "Absence of evidence is \"unknown\", never \"confirmed_absent\"."
+    },
+    "hazard": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["level", "assessment_basis", "observation", "measurement_value", "measurement_unit"],
+      "properties": {
+        "level": { "$ref": "#/$defs/level" },
+        "assessment_basis": {
+          "type": "string",
+          "enum": ["official_geodata", "cantonal_geodata", "derived_calculation", "not_assessed"]
+        },
+        "observation": { "type": ["string", "null"], "description": "e.g. \"Zone Z1b (SIA 261)\" or \"Hors zone de danger\"." },
+        "measurement_value": { "type": ["number", "null"] },
+        "measurement_unit": { "type": ["string", "null"], "description": "e.g. cm (hail 50y), m (runoff depth)." }
+      }
+    },
+    "money_estimate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["best_estimate_chf", "low_chf", "high_chf", "status", "method", "explanation"],
+      "properties": {
+        "best_estimate_chf": { "type": ["number", "null"], "minimum": 0 },
+        "low_chf": { "type": ["number", "null"], "minimum": 0 },
+        "high_chf": { "type": ["number", "null"], "minimum": 0 },
+        "status": {
+          "type": "string",
+          "enum": ["not_estimated", "derived_calculation", "model_estimate", "documented"]
+        },
+        "method": { "type": ["string", "null"] },
+        "explanation": { "type": ["string", "null"] }
+      }
+    },
+    "protection_system": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["system_type", "presence", "note"],
+      "properties": {
+        "system_type": {
+          "type": "string",
+          "enum": [
+            "sprinklers",
+            "fire_detection",
+            "fire_compartmentation",
+            "lightning_protection",
+            "flood_barrier",
+            "backflow_prevention",
+            "security_alarm",
+            "other"
+          ]
+        },
+        "presence": { "$ref": "#/$defs/presence" },
+        "note": { "type": ["string", "null"] }
+      }
+    },
+    "repair_flag": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["component", "observation", "priority", "evidence_basis"],
+      "properties": {
+        "component": { "type": "string" },
+        "observation": { "type": "string" },
+        "priority": {
+          "type": "string",
+          "enum": ["inspect_now", "inspect_within_12_months", "monitor", "undetermined"]
+        },
+        "evidence_basis": {
+          "type": "string",
+          "enum": ["visual_indication", "public_document", "inspection_report"]
+        }
+      },
+      "description": "Never assert that repair is necessary based only on aerial imagery; recommend verification."
+    },
+    "conflict": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["field", "values", "source_ids", "note"],
+      "properties": {
+        "field": { "type": "string", "description": "Dot path, e.g. building.construction_year." },
+        "values": { "type": "array", "items": { "type": ["string", "number", "null"] } },
+        "source_ids": { "type": "array", "items": { "type": "string" } },
+        "note": { "type": ["string", "null"] }
+      }
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "provider",
+        "kind",
+        "url",
+        "retrieved_at",
+        "reliability",
+        "building_specific",
+        "excerpt",
+        "supports_fields"
+      ],
+      "properties": {
+        "id": { "type": "string", "pattern": "^src_\\d+$" },
+        "provider": { "type": "string" },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "client_input",
+            "official_registry",
+            "official_geodata",
+            "aerial_image",
+            "company_website",
+            "public_document",
+            "derived_calculation",
+            "other"
+          ]
+        },
+        "url": { "type": ["string", "null"] },
+        "retrieved_at": { "type": ["string", "null"] },
+        "reliability": {
+          "type": "string",
+          "enum": ["verified", "observed", "inferred"],
+          "description": "verified = official/direct proof; observed = seen by vision model; inferred = indirect hypothesis."
+        },
+        "building_specific": {
+          "type": "boolean",
+          "description": "true if the evidence is tied to this building/address, false if company-level only."
+        },
+        "excerpt": { "type": ["string", "null"], "description": "Short quote or value backing the claim (web/doc sources)." },
+        "supports_fields": {
+          "type": "array",
+          "items": { "type": "string" },
+          "minItems": 1,
+          "description": "Dot paths, e.g. building.construction_year, external_hazards.hail. Only real tool-provided evidence."
+        }
+      }
+    }
+  }
+}

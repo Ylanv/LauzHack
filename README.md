@@ -2,11 +2,23 @@
 
 Hackathon AXA B2B · LauzHack 2026
 
-**But :** à partir de **3 champs client** (nom, raison sociale, adresse), produire automatiquement un **dossier de pré-souscription** pour un bâtiment : identité, caractéristiques, dangers naturels, exposition incendie/industrielle, inconnues à vérifier. Chaque valeur est sourcée.
+**But :** à partir de **3 champs client** (nom, raison sociale, adresse), produire automatiquement un **dossier de pré-souscription** pour un bâtiment : identité, caractéristiques, valorisation, dangers naturels, exposition incendie, protections, entretien, inconnues à vérifier. Chaque valeur est sourcée.
 
-**Principe :** *API first, LLM last.* Tout ce qui se fait en Python (géocodage, registres, SIG, rasters) coûte 0 token. Le LLM n'intervient que pour la vision, la recherche industrielle et la synthèse finale.
+**Principe :** *API first, LLM last.* Tout ce qui se fait en Python (géocodage, registres, SIG, rasters, assemblage) coûte 0 token. Le LLM n'intervient que pour la vision, l'extraction industrielle et la synthèse finale.
 
-**Livrable :** un **JSON** (format final pour l'instant, rendu UI/PDF plus tard). On ne calcule **pas** de prime ni de score arbitraire.
+**Livrable :** un **`report.json`** conforme à [`schemas/report.schema.json`](schemas/report.schema.json) (v1.0). Le rapport lisible (UI/PDF) sera généré plus tard **à partir du JSON par templates**, sans appel LLM supplémentaire. On ne calcule **ni prime ni score actuariel**.
+
+```
+schemas/report.schema.json    # contrat agent ↔ backend ↔ frontend
+schemas/report.example.json   # exemple complet et valide (fictif)
+prompts/system.md             # règles LLM + I/O des 3 appels
+src/validate_report.py        # validation schéma + traçabilité des sources
+```
+
+```bash
+python -m venv .venv && .venv/Scripts/pip install -r requirements.txt
+python -m src.validate_report schemas/report.example.json   # → OK
+```
 
 ---
 
@@ -28,7 +40,7 @@ flowchart TD
 
     IMG --> Q2{"Image<br/>exploitable ?"}
     Q2 -- Oui --> VIS["analyze_roof()<br/>1 appel vision"]:::llm
-    Q2 -- Non --> VNA["vision = unknown"]:::stop
+    Q2 -- Non --> VNA["aerial = unknown"]:::stop
 
     WEB --> Q3{"Preuves utiles ?<br/>budget restant ?"}
     Q3 -- Oui --> WEB
@@ -39,10 +51,11 @@ flowchart TD
     VIS --> EV
     VNA --> EV
 
-    EV["3. Evidence Store<br/>liste d'Evidence JSON normalisées"]:::py
-    EV --> VAL["4. Validation déterministe<br/>contradictions · champs manquants"]:::py
-    VAL --> SYN["5. generate_report()<br/>1 appel LLM de synthèse"]:::llm
-    SYN --> OUT["report.json<br/>sections + evidence + metrics"]:::output
+    EV["3. Evidence Store<br/>liste d'Evidence (field = dot path)"]:::py
+    EV --> ASM["4. Assembler<br/>remplit report.json · regroupe sources[]<br/>détecte conflits · calcule metrics"]:::py
+    ASM --> SYN["5. synthesize()<br/>1 appel LLM → underwriting<br/>+ fire_exposure.level"]:::llm
+    SYN --> VAL["6. validate_report<br/>schéma + traçabilité"]:::py
+    VAL --> OUT["report.json"]:::output
 
     classDef input fill:#e8eefc,stroke:#3b5bdb,color:#1b2b6b
     classDef py fill:#e7f3eb,stroke:#2f9e44,color:#165c39
@@ -53,20 +66,25 @@ flowchart TD
 
 🟩 Python, 0 token · 🟧 appel LLM · ⬜ sortie dégradée / arrêt
 
+**Le LLM ne réécrit jamais le rapport entier.** Chaque appel renvoie uniquement son sous-objet du schéma (structured output imposé par schéma) ; Python assemble le reste.
+
 ---
 
-## 2. Les tools
+## 2. Les tools — qui remplit quoi
 
-| Tool | Input | Output | Sources | LLM |
+| Tool | Input | Remplit dans `report.json` | Sources | LLM |
 |---|---|---|---|---|
-| `resolve_company()` | raison sociale | UID/IDE, forme juridique, siège | Zefix Linked Data (SPARQL) | 0 |
-| `resolve_building()` | adresse | coordonnées LV95/WGS84, EGID, canton, commune | geo.admin.ch SearchServer + RegBL | 0 |
-| `get_building_profile()` | EGID | catégorie, année, étages, emprise, hauteur/toit, altitude | RegBL, swissBUILDINGS3D, API Height | 0 |
-| `get_hazards()` | géométrie + canton | ruissellement, séisme, sol, grêle, (crues/glissements si dispo) | OFEV, MétéoSuisse, geodienste.ch | 0 |
-| `get_aerial_image()` | géométrie | image recadrée sur l'emprise + marge, date, attribution | SWISSIMAGE | 0 |
-| `analyze_roof()` | image | observations structurées (toit, PV, équipements, voisins, végétation) | modèle vision | 1 appel |
-| `investigate_company()` | entreprise + adresse | activité, procédés, gaz/fours/inflammables, avec URL + citation | site officiel, PDF publics, SwissPRTR | variable, plafonné |
-| `generate_report()` | Evidence Store | `report.json` | — | 1 appel |
+| `resolve_company()` | raison sociale | `company.{registered_name, uid, legal_form, registered_seat}` | Zefix Linked Data (SPARQL) | 0 |
+| `resolve_building()` | adresse | `building.{resolved_address, coordinates, canton, commune, egid}` | geo.admin.ch SearchServer + RegBL | 0 |
+| `get_building_profile()` | EGID | `building.{category, construction_year, age_years, floor_count, footprint_m2, floor_area_m2, height_m, roof_shape, terrain_altitude_m, cantonal_insurance_regime}` | RegBL, swissBUILDINGS3D, API Height, règle cantonale | 0 |
+| `get_hazards()` | géométrie + canton | `external_hazards.*` (11 dangers) | OFEV, MétéoSuisse, geodienste.ch | 0 |
+| `get_aerial_image()` | géométrie | `aerial.{image_url, image_date, attribution, neighbour_min_distance_m}` | SWISSIMAGE, géométrie voisins | 0 |
+| `analyze_roof()` | image recadrée | `aerial.{pv_panels, roof_equipment, vegetation_nearby, observations}`, `maintenance.potential_issues` | modèle vision | 1 appel |
+| `investigate_company()` | entreprise + adresse | `company.{business_sector, noga_code, site_activities, occupies_building}`, `fire_exposure.*` (sauf level), `protection_systems` | site officiel, PDF publics, SwissPRTR | plafonné |
+| `estimate_reconstruction()` | `floor_area_m2` | `valuations.estimated_reconstruction_cost` | surface × coût de référence (formule) | 0 |
+| `synthesize()` | rapport assemblé compact | `underwriting`, `fire_exposure.{preliminary_level, explanation}` | — | 1 appel |
+
+Prompts et I/O exacts des 3 appels LLM : [`prompts/system.md`](prompts/system.md).
 
 ### Endpoints & couches
 
@@ -81,130 +99,94 @@ layer: ch.bfs.gebaeude_wohnungs_register      # via Find Features / Identify API
 SPARQL: https://ld.admin.ch/sparql/
 ```
 
-| Danger | Couche / source | Traitement |
+| `external_hazards.*` | Couche / source | MVP |
 |---|---|---|
-| Ruissellement | `ch.bafu.gefaehrdungskarte-oberflaechenabfluss` | intersection emprise |
-| Zone sismique (SIA 261) | `ch.bafu.gefahren-gefaehrdungszonen` | lecture zone |
-| Classe de sol sismique | `ch.bafu.gefahren-baugrundklassen` | lecture classe |
-| Grêle 10 / 50 ans | `ch.meteoschweiz.hagelgefaehrdung-korngroesse_10_jahre` / `_50_jahre` | valeur raster (COG via STAC, grille ~1 km) |
-| Crues, glissements, chutes de pierres, avalanches | geodienste.ch / géoportails cantonaux | intersection — **seulement si le canton est accessible** |
+| `surface_runoff` | `ch.bafu.gefaehrdungskarte-oberflaechenabfluss` — intersection emprise | ✅ |
+| `earthquake` | `ch.bafu.gefahren-gefaehrdungszonen` (zone SIA 261) + `ch.bafu.gefahren-baugrundklassen` (sol) | ✅ |
+| `hail` | `ch.meteoschweiz.hagelgefaehrdung-korngroesse_50_jahre` (et `_10_jahre`) — raster COG via STAC, ~1 km, en cm | ✅ |
+| `river_flood`, `landslide`, `rockfall`, `avalanche` | geodienste.ch / géoportails cantonaux — seulement si le canton est accessible | extension |
+| `windstorm`, `heavy_snow`, `lightning`, `wildfire` | pas de source fiable directe → `not_assessed` par défaut | extension |
+
+Chaque danger a la même structure : `level`, `assessment_basis`, `observation`, `measurement_value`, `measurement_unit`. Non traité ⇒ `level: "unknown"`, `assessment_basis: "not_assessed"`.
 
 Champs RegBL utiles : `gkat` (catégorie), `gbauj` (année de construction), `gastw` (nb de niveaux).
 
 ### Pièges à connaître
 
-- **Ruissellement ≠ crue.** Deux analyses séparées.
+- **Ruissellement ≠ crue.** Deux dangers séparés.
 - Certaines couches geo.admin.ch sont du **WMTS d'affichage** : lire le jeu vectoriel/raster sous-jacent, jamais déduire un niveau depuis une couleur.
-- **Zefix ne prouve pas** que l'entreprise occupe le bâtiment.
-- **Emprise au sol ≠ surface habitable ≠ surface de plancher.** Ne pas les confondre.
+- **Zefix ne prouve pas** que l'entreprise occupe le bâtiment → `company.occupies_building`.
+- **Emprise au sol ≠ surface de plancher.** `footprint_m2` ≠ `floor_area_m2`.
 - Une orthophoto **ne permet pas** de conclure sur sprinklers, gaz ou résistance au feu.
-- Une info trouvée au niveau de l'entreprise (ex. « fours de traitement thermique ») reste `inferred` tant qu'aucune preuve ne la rattache **à ce site**.
+- Une info trouvée au niveau de l'entreprise reste `possible` + `building_specific: false` tant qu'aucune preuve ne la rattache **à ce site**.
 - geo.admin.ch : gratuit mais **fair use** → cache obligatoire.
 
 ---
 
-## 3. Format Evidence (sortie de chaque tool)
+## 3. Evidence (sortie interne de chaque tool)
 
-Chaque tool retourne une liste d'objets `Evidence` :
+Chaque tool retourne une liste d'`Evidence`. `field` est **directement le dot path** du rapport, donc l'assembleur n'a qu'à copier la valeur et regrouper les sources.
 
 ```json
 {
-  "field": "industrial_heat_process",
-  "value": "thermal_treatment",
-  "status": "inferred",
-  "building_confirmed": false,
-  "confidence": "medium",
+  "field": "fire_exposure.high_temperature_processes",
+  "value": "confirmed_present",
   "source": {
-    "type": "company_website",
-    "name": "Site officiel",
+    "provider": "Site officiel de l'entreprise",
+    "kind": "company_website",
     "url": "https://example.com/production",
     "retrieved_at": "2026-11-21"
   },
-  "evidence": "Company describes thermal treatment.",
-  "requires_verification": true
+  "reliability": "inferred",
+  "building_specific": false,
+  "excerpt": "We offer thermal treatment of steel parts."
 }
 ```
 
-| `status` | Signification |
-|---|---|
-| `verified` | source officielle ou preuve directe pertinente |
-| `observed` | vu par le modèle vision, non confirmé techniquement |
-| `inferred` | hypothèse à partir d'infos indirectes |
-| `unknown` | absent, contradictoire ou insuffisant |
-
-Règles : chaque valeur garde sa provenance ; si deux sources se contredisent, on garde **les deux** et on le signale dans `conflicts` — jamais de choix silencieux.
+L'assembleur fusionne les Evidence de même source en une entrée de `sources[]` avec `supports_fields` (une URL n'est écrite qu'une fois → moins de tokens). Si deux Evidence donnent des valeurs différentes pour un même `field`, il les garde **toutes les deux** dans `underwriting.conflicts` — jamais de choix silencieux.
 
 ---
 
-## 4. Format final — `report.json`
+## 4. Format final — `report.json` (v1.0)
 
-Chaque champ est un `Evidence` (cf. §3). Exemple abrégé :
+Schéma complet : [`schemas/report.schema.json`](schemas/report.schema.json) · exemple valide : [`schemas/report.example.json`](schemas/report.example.json)
 
-```json
-{
-  "report_id": "uuid",
-  "generated_at": "2026-11-21T14:00:00Z",
-  "input": {
-    "client_name": "…",
-    "company_legal_name": "…",
-    "address": "…"
-  },
+| Bloc | Contenu |
+|---|---|
+| `request` | les 3 inputs client |
+| `company` | nom Zefix, UID, forme juridique, siège, secteur, code NOGA, activités **du site**, CA annuel, `occupies_building` |
+| `building` | EGID, adresse résolue, coordonnées LV95/WGS84, canton, commune, catégorie, année, âge, étages, emprise, surface de plancher, hauteur, toit, altitude, régime d'assurance cantonal |
+| `aerial` | image (url, date, attribution), PV, équipements toit, végétation, distance au voisin, observations |
+| `valuations` | `estimated_market_value` et `estimated_reconstruction_cost` séparés : best/low/high CHF + `status` + méthode |
+| `external_hazards` | 11 dangers, structure identique |
+| `fire_exposure` | niveau préliminaire, gaz, haute température, inflammables, chimiques, procédés, voisins dangereux |
+| `protection_systems[]` | sprinklers, détection, compartimentage, paratonnerre, protection crue… + `presence` |
+| `maintenance` | périmètre de l'évaluation, problèmes potentiels → **recommandations d'inspection**, pas de dégâts confirmés |
+| `underwriting` | constats, facteurs aggravants, infos manquantes, conflits, recommandations |
+| `sources[]` | centralisées : provider, kind, url, date, `reliability`, `building_specific`, extrait, `supports_fields` |
+| `metrics` | champs remplis / applicables, appels outils (durée, tokens, cache), tokens totaux, coût, durée |
 
-  "identification": {
-    "company_uid":   { "value": "CHE-123.456.789", "status": "verified", "source": {} },
-    "legal_form":    { "value": "AG", "status": "verified", "source": {} },
-    "registered_seat": {},
-    "egid":          { "value": "123456", "status": "verified", "source": {} },
-    "coordinates":   { "value": { "lv95": [2700000, 1200000], "wgs84": [47.0, 8.0] }, "status": "verified", "source": {} },
-    "canton": {}, "commune": {}
-  },
+### Conventions
 
-  "building": {
-    "category": {}, "construction_year": {}, "age_years": {}, "floors": {},
-    "footprint_m2": {}, "height_m": {}, "roof_shape": {}, "terrain_altitude_m": {}
-  },
+| Donnée | Type | Exemple |
+|---|---|---|
+| Montant, surface | `number \| null` | `2500000.0`, `1850.5` |
+| Année, étages | `integer \| null` | `1998` |
+| Texte | `string \| null` | `"Toit plat"` |
+| Niveau de risque | enum | `low` · `moderate` · `high` · `very_high` · `unknown` |
+| Présence d'équipement | enum | `confirmed_present` · `confirmed_absent` · `possible` · `unknown` |
+| Fiabilité d'une source | enum | `verified` (officiel/preuve directe) · `observed` (vision) · `inferred` (indirect) |
+| Statut d'une valorisation | enum | `not_estimated` · `derived_calculation` · `model_estimate` · `documented` |
 
-  "natural_hazards": {
-    "surface_runoff": {}, "flood": {}, "seismic_zone": {}, "seismic_soil_class": {},
-    "hail_50y_cm": {}, "landslide": {}, "rockfall": {}, "avalanche": {}
-  },
+Règles clés :
+- **Tous les champs sont obligatoires**, `null` / `"unknown"` quand on ne sait pas. **Inconnu ≠ zéro ≠ absent.** Absence de preuve ⇒ `unknown`, jamais `confirmed_absent`.
+- **Valeur de reconstruction ≠ valeur vénale.** Pour l'assurance bâtiment (valeur à neuf), c'est la reconstruction qui compte ; la valeur vénale inclut le terrain. MVP : `not_estimated` tant qu'on n'a pas `floor_area_m2` + un coût de référence validé. **Jamais estimé par le LLM.**
+- **CA annuel** décrit l'entreprise, pas le bâtiment ; souvent `null` pour les SA/Sàrl privées.
+- Chaque valeur factuelle (hors `request`, `underwriting`, `metrics`) doit être citée dans un `sources[].supports_fields`. Les URL doivent venir des résultats de tools, jamais du LLM.
 
-  "fire_industrial": {
-    "activity": {}, "processes": [], "high_temperature": {}, "gas_use": {},
-    "flammable_storage": {}, "chemicals": {}, "neighbouring_hazards": {}
-  },
+### Validation (backend)
 
-  "aerial": {
-    "image_url": "…", "image_date": {}, "pv_panels": {}, "roof_equipment": {},
-    "vegetation": {}, "neighbour_spacing": {}, "access": {}
-  },
-
-  "protection_and_value": {
-    "sprinklers":      { "value": null, "status": "unknown" },
-    "fire_detection":  { "value": null, "status": "unknown" },
-    "claims_history":  { "value": null, "status": "unknown" },
-    "rebuild_value":   { "value": null, "status": "unknown" },
-    "cantonal_insurance_regime": {}
-  },
-
-  "underwriting_summary": {
-    "key_exposures": ["Activité de traitement thermique documentée (niveau entreprise)"],
-    "aggravating_factors": [],
-    "priority_checks": ["Confirmer la présence de fours sur ce site", "Protections incendie inconnues"],
-    "conflicts": []
-  },
-
-  "metrics": {
-    "fields_total": 0, "fields_filled": 0,
-    "tool_calls": [{ "tool": "get_hazards", "duration_ms": 0, "tokens_in": 0, "tokens_out": 0 }],
-    "tokens_total": { "input": 0, "output": 0 },
-    "cost_chf": 0.0,
-    "duration_ms": 0
-  }
-}
-```
-
-`underwriting_summary` est le **seul** bloc écrit par le LLM de synthèse. Pas de note du type « Incendie 87/100 » — on écrit des constats + vérifications prioritaires.
+`src/validate_report.py` vérifie : conformité au schéma, ids de sources uniques, `supports_fields` pointant vers des champs existants, ids cités dans `conflicts` existants, et que **toute valeur connue est couverte par une source**. Un rapport qui échoue est rejeté. Le schéma garantit la structure, pas la véracité : d'où le contrôle de traçabilité.
 
 ---
 
@@ -212,58 +194,61 @@ Chaque champ est un `Evidence` (cf. §3). Exemple abrégé :
 
 | Étape | Budget cible |
 |---|---|
-| Géocodage, RegBL, SIG, rasters | 0 |
+| Géocodage, RegBL, SIG, rasters, assemblage | 0 |
 | Recherche web (HTTP) | 0 token LLM |
 | Extraction industrielle | ~2 000 input |
 | Vision | 1 image + ~300 output |
 | Synthèse finale | ~2 000 input + ~700 output |
+| Rendu rapport lisible | 0 (templates) |
 
 Règles :
 1. **Recherche web en 2 temps** : d'abord titres/URL/extraits, puis ouvrir **max 3–5 sources** (site officiel en priorité).
 2. **Extraction ciblée** : dans un long PDF, ne passer que les pages procédés/équipements.
 3. **Une seule image**, recadrée sur l'emprise du bâtiment (sinon coût ↑ et risque de décrire le voisin).
-4. **Cache** par EGID / couche / URL avec date de récupération. Le nom du client **jamais** dans la clé de cache.
-5. **Stop condition** : chaque recherche répond à une question précise ; on s'arrête dès preuve suffisante ou budget atteint.
+4. **Sous-schémas** : chaque appel LLM ne produit que ses champs, pas le rapport entier.
+5. **Cache** par EGID / couche / URL avec date de récupération. Le nom du client **jamais** dans la clé de cache.
+6. **Stop condition** : chaque recherche répond à une question précise ; on s'arrête dès preuve suffisante ou budget atteint.
 
 ---
 
 ## 6. Stack
 
-- **Backend :** Python + FastAPI · GeoPandas, Shapely, Rasterio, httpx
+- **Backend :** Python + FastAPI · GeoPandas, Shapely, Rasterio, httpx · `jsonschema`
+- **LLM :** structured output imposé par schéma
 - **Stockage :** SQLite + fichiers géo prétraités (PostGIS si besoin plus tard)
-- **Front (plus tard) :** Next.js
+- **Front (plus tard) :** Next.js, rendu depuis `report.json`
 
 ---
 
 ## 7. Roadmap
 
-| # | Phase | Résultat |
+| # | Phase | Blocs remplis |
 |---|---|---|
-| 1 | Data foundation — géocodage, EGID, RegBL, Zefix | bloc `identification` + `building` |
-| 2 | Natural hazards — OFEV, MétéoSuisse | bloc `natural_hazards` |
-| 3 | Multimodal — orthophoto, recadrage, vision | bloc `aerial` |
-| 4 | Industrial — recherche web ciblée, extraction de preuves | bloc `fire_industrial` |
-| 5 | Evidence store — normalisation, conflits | `Evidence` partout |
-| 6 | Report — synthèse LLM | `report.json` complet |
-| 7 | Benchmark — tokens, coût, temps, qualité | bloc `metrics` |
+| 1 | Data foundation — géocodage, EGID, RegBL, Zefix, règle cantonale | `request`, `company` (registre), `building` |
+| 2 | Natural hazards — OFEV, MétéoSuisse | `external_hazards` (ruissellement, séisme, grêle) |
+| 3 | Multimodal — orthophoto, recadrage, vision | `aerial`, `maintenance` |
+| 4 | Industrial — recherche web ciblée, extraction de preuves | `company` (activité), `fire_exposure`, `protection_systems` |
+| 5 | Assembler — Evidence → report, `sources[]`, conflits | `sources`, `underwriting.conflicts` |
+| 6 | Synthèse + validation | `underwriting`, rapport validé |
+| 7 | Benchmark — tokens, coût, temps, qualité | `metrics` |
 
-**MVP obligatoire (bout en bout) :** 3 champs → EGID → RegBL → ruissellement/séisme/grêle → 1 image analysée → 1 recherche industrielle sourcée → `report.json`.
+**MVP obligatoire (bout en bout) :** 3 champs → EGID → RegBL → ruissellement/séisme/grêle → 1 image analysée → 1 recherche industrielle sourcée → `report.json` qui passe `validate_report`.
 
-**Extensions :** cartes cantonales, estimation de valeur de reconstruction, investigation des protections.
+**Extensions :** cartes cantonales (crues, glissements, chutes de pierres, avalanches), estimation de reconstruction, investigation des protections, rendu UI/PDF.
 
 ---
 
 ## 8. Évaluation (pour les juges)
 
-Tester sur **3 bâtiments réels** : bureaux, entrepôt, industrie. Comparer avec un agent généraliste non optimisé (longs documents en contexte).
+Tester sur **3 bâtiments réels** : bureaux, entrepôt, industrie. Comparer avec un agent généraliste non optimisé (longs documents en contexte, rapport entier généré par le LLM).
 
 | Métrique | Mesure |
 |---|---|
-| Couverture | champs remplis / champs applicables |
+| Couverture | `metrics.fields_filled / fields_applicable` |
 | Exactitude | vérif manuelle contre les sources |
 | Précision industrielle | % d'affirmations étayées par une preuve correcte |
-| Inconnues critiques détectées | vs checklist définie à l'avance |
-| Tokens / coût / temps par rapport | comptage réel |
+| Inconnues critiques détectées | `underwriting.missing_information` vs checklist définie à l'avance |
+| Tokens / coût / temps par rapport | `metrics` |
 
 L'optimisation ne compte que si le coût baisse **sans perte de qualité ni de couverture**.
 
@@ -278,3 +263,4 @@ L'optimisation ne compte que si le coût baisse **sans perte de qualité ni de c
 - [MétéoSuisse — Grêle](https://opendatadocs.meteoswiss.ch/c-climate-data/c5-radar-based-climate-data)
 - [SWISSIMAGE](https://www.swisstopo.admin.ch/fr/orthophotos-swissimage-10-cm) · [swissBUILDINGS3D](https://www.swisstopo.admin.ch/fr/modele-du-territoire-swissbuildings3d-3-0-beta)
 - [SwissPRTR](https://www.bafu.admin.ch/fr/swissprtr-fr)
+- [AXA — Assurance des bâtiments commerciaux](https://www.axa.ch/fr/clients-entreprises/offres/inventaire-immobilier/assurance-batiments.html)
