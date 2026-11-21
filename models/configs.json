@@ -66,6 +66,15 @@
       "reference_usd_per_case": 0.073,
       "reference_source": "pilot1 per-case actual (Lead, 2026-11-21)"
     },
+    "openrouter_gemini35flash_lite": {
+      "provider": "openrouter",
+      "model": "google/gemini-3.5-flash-lite",
+      "structured": "json_schema",
+      "temperature": 0,
+      "max_tokens": 32000,
+      "expected_output_tokens": 9000,
+      "price_usd_per_mtok": {"input": 0.30, "output": 2.50}
+    },
     "openrouter_gemini35flash": {
       "provider": "openrouter",
       "model": "google/gemini-3.5-flash",

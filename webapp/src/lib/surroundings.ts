@@ -82,21 +82,21 @@ export function analyseSurroundings(b: { lon: number; lat: number }, q: Query): 
 
   // the footprint that contains the address, and the nearest other building
   let own: { geom: any; at: LL } | null = null
-  const others: any[] = []
   for (const f of q("building")) {
-    if (!f.geometry || !f.geometry.type.includes("Polygon")) continue
+    if (!f.geometry?.type.includes("Polygon")) continue
     const g = metrics(f.geometry)
-    if (g.inside && !own) own = { geom: f.geometry, at: g.at }
-    else others.push(f)
+    if (g.inside) { own = { geom: f.geometry, at: g.at }; break }
   }
   if (own) out.push({ kind: "building", d: 0, name: "", geom: own.geom, at: own.at, t0: -1 })
-  const ownKey = own ? JSON.stringify(own.geom) : ""
-  const nb = nearest(others.filter((f) => JSON.stringify(f.geometry) !== ownKey), MAX.neighbour)
-  if (nb) out.push({ kind: "neighbour", d: nb.d, name: "", geom: nb.f.geometry, at: nb.at, t0: -1 })
 
-  const roads = q("transportation", ["in", "class", "motorway", "trunk", "primary", "secondary", "tertiary"]).filter((f) => f.geometry?.type?.includes("LineString"))
-  const road = nearest(roads, MAX.road)
-  if (road) out.push({ kind: "road", d: road.d, name: name(road.f, ""), geom: wholeLine(road.f, roads), at: road.at, t0: -1 })
+  const majorClasses = ["motorway", "trunk", "primary", "secondary", "tertiary"]
+  const roads = q("transportation", ["in", "class", ...majorClasses, "minor", "service", "residential"])
+    .filter((f) => f.geometry?.type.includes("LineString"))
+  const major = roads.filter((f) => majorClasses.includes(f.properties?.class))
+  const mainRoad = nearest(major, MAX.road)
+  const road = mainRoad ?? nearest(roads, MAX.road)
+  if (road) out.push({ kind: "road", d: road.d, name: name(road.f, mainRoad ? "Main road" : "Access road"),
+    geom: wholeLine(road.f, mainRoad ? major : roads), at: road.at, t0: -1 })
 
   const water = nearest([...q("water", ["!=", "class", "pool"]), ...q("waterway", ["in", "class", "river", "canal", "stream"])].filter((f) => f.geometry), MAX.water)
   const wgeom = water && water.f.geometry.type.includes("LineString") ? wholeLine(water.f, q("waterway", ["in", "class", "river", "canal", "stream"]).filter((f) => f.geometry?.type?.includes("LineString"))) : water?.f.geometry

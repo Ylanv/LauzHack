@@ -1,4 +1,4 @@
-# Alpenmark web app (Smart Property)
+# AXAlotl web app (Smart Property)
 
 React + Vite + TypeScript, plain CSS. Three client screens: form, cinematic waiting screen, "request sent".
 
@@ -26,7 +26,7 @@ python -m uvicorn src.main:app --port 8000
 | Fish | **Live port** of the original `betta_fish.py` renderer (`src/lib/betta.ts`): 3D body and veils on a travelling wave, character grid, 30 fps, seamless 14 s loop. Starts fully grown (no drawing-in intro), recoloured to the app palette |
 | Companion | Real OriginKit cobalt-sprite WebGL component (`CobaltSprite.tsx`), moods via props |
 
-Open `/?demo` for the simulated flow without API keys. The live backend reads keys from the repo root's `.env`. Set `REPORT_MODEL` to choose the report model. With only OpenRouter configured, the default is `openrouter_gemini35flash`.
+Open `/?demo` for the simulated flow without API keys. The live backend reads keys from the repo root's `.env`. Set `REPORT_MODEL` to choose the report model. The default is `openrouter_gemini35flash_lite`.
 
 ## Licences and credits
 - Fish: ASCII betta by @dwcminh.ascii (github.com/dwcminh/ascii-art). Personal, non-commercial use only; commercial use needs the author's permission. Credit stays in the footer.

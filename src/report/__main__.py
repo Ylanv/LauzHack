@@ -36,7 +36,7 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=pipeline.__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--input", help="customer request, 2.0-llm-input document or evidence bundle (JSON)")
     ap.add_argument("--output", help="output directory")
-    ap.add_argument("--model", help="config id in models/configs.json (default REPORT_MODEL or claude_opus55)")
+    ap.add_argument("--model", help="config id in models/configs.json (default REPORT_MODEL or openrouter_gemini35flash_lite)")
     ap.add_argument("--max-usd", type=float, help="spending cap for this report (default REPORT_MAX_USD or 1.00)")
     ap.add_argument("--no-vision", action="store_true", help="ETL without vision calls")
     ap.add_argument("--assets", help="folder with an annotations.json sidecar for the images (synthetic cases)")

@@ -27,7 +27,7 @@ export default function Dashboard() {
       <header className="db-top no-print">
         <button type="button" className="db-brand" onClick={() => setOpen(null)}>
           <i><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinejoin="round" strokeLinecap="round"><path d="M3 11l9-7 9 7v9H3z" /><path d="M9 20v-6h6v6" /></svg></i>
-          Alpenmark <span>Underwriting</span>
+          AXAlotl <span>Underwriting</span>
         </button>
         <div className="db-top-actions">
           {api && <button type="button" className="db-btn ghost" onClick={reload}>Refresh</button>}
