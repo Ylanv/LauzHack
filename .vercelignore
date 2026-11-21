@@ -9,5 +9,8 @@ __pycache__/
 *.pyc
 .vercel/
 photos_test/
-# Teammate web app (Vite/React) deployed separately for now
-webapp/
+# Web app (Vite/React): deployed by its own Vercel project (lauz-hack-webapp, root webapp/).
+# Only its local build/install output is excluded; the backend project does not build it.
+webapp/node_modules/
+webapp/dist/
+webapp/.vercel/
