@@ -8,7 +8,7 @@ import { MapFlight } from "./lib/mapFlight"
 import { paintBackground, paintFish } from "./lib/background"
 import { clamp, reducedMotion } from "./lib/utils"
 import { MOCK, INSIGHTS } from "./pipeline/mock"
-import { DEMO, getIndustries, startReport, reportStatus, progressError, AssessError, type ReportProgress } from "./pipeline"
+import { DEMO, getIndustries, streamReport, progressError, AssessError, type ReportProgress } from "./pipeline"
 import type { Coords, FlightInput, RequestInput, StepId } from "./pipeline/types"
 
 const STAGE_LABEL: Record<string, string> = {
@@ -91,24 +91,19 @@ export default function App() {
     // and only completes once the report has been generated and stored for the team (demo flow: simulated)
     if (!DEMO) {
       const fail = (e: unknown) => { if (run.current === r) { r.live = "error"; r.err = e instanceof AssessError ? e : new AssessError("service", "The assessment service had a problem. Your details are kept, please try again.") } }
-      let misses = 0
-      const poll = (id: string) => {
+      let photos = false
+      const onProgress = (p: ReportProgress) => {
         if (run.current !== r) return
-        reportStatus(id).then((p) => {
-          if (run.current !== r) return
-          misses = 0
-          setProgress(p)
-          if (p.done_stages.includes("features")) MapFlight.loadBuildingPhotos(id)
-          r.etlDone = p.done_stages.includes("etl")
-          if (p.status === "succeeded") {
-            r.done = true
-            finish()
-          }
-          else if (p.status === "running") setTimeout(() => poll(id), 1500)
-          else fail(progressError(p))
-        }).catch(() => { if (++misses >= 5) fail(new AssessError("service", "We lost the connection to the assessment service. Your details are kept, please try again.")); else setTimeout(() => poll(id), 2500) })
+        setProgress(p)
+        if (!photos && p.done_stages.includes("features")) { photos = true; MapFlight.loadBuildingPhotos(p.job_id) }
+        r.etlDone = p.done_stages.includes("etl")
       }
-      startReport(i, accessCode).then(poll).catch(fail)
+      // progress is streamed while the backend works (POST /api/reports/stream); the last line carries the final status
+      streamReport(i, accessCode, onProgress).then((p) => {
+        if (run.current !== r) return
+        if (p.status === "succeeded") { r.done = true; finish() }
+        else fail(progressError(p))
+      }).catch(fail)
     }
     scrollTo(0, 0)
   }

@@ -25,7 +25,7 @@ from uuid import uuid4
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from fastapi import FastAPI, Header, HTTPException  # noqa: E402
-from fastapi.responses import FileResponse, HTMLResponse  # noqa: E402
+from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse  # noqa: E402
 from pydantic import BaseModel, Field  # noqa: E402
 
 from src import config  # noqa: E402
@@ -105,9 +105,8 @@ REPORTS_DIR = Path(_os.environ.get("REPORTS_DIR") or ("/tmp/reports" if config.O
 _JOBS: dict[str, Path] = {}
 
 
-@app.post("/api/reports", status_code=202)
-def start_report(req: LlmInputRequest, x_access_code: str | None = Header(None)) -> dict:
-    require_access_code(x_access_code)
+def _new_job(req: "LlmInputRequest") -> tuple[str, Path, threading.Thread]:
+    """Creates the job folder and returns (job_id, folder, thread that runs the report pipeline — not started)."""
     from src.report import pipeline as report_pipeline
     slug = _re.sub(r"[^a-z0-9]+", "-", req.company_legal_name.lower()).strip("-")[:35] or "case"
     job_id = f"{slug}-{_time.strftime('%Y%m%d-%H%M%S')}-{uuid4().hex[:12]}"
@@ -128,8 +127,52 @@ def start_report(req: LlmInputRequest, x_access_code: str | None = Header(None))
                 encoding="utf-8",
             )
 
-    threading.Thread(target=run_job, daemon=True).start()
+    return job_id, out, threading.Thread(target=run_job, daemon=True)
+
+
+@app.post("/api/reports", status_code=202)
+def start_report(req: LlmInputRequest, x_access_code: str | None = Header(None)) -> dict:
+    """Background job + polling (GET /api/reports/{id}). Long-running servers only: on Vercel the thread is suspended
+    once this response is sent — use POST /api/reports/stream there."""
+    require_access_code(x_access_code)
+    job_id, _, thread = _new_job(req)
+    thread.start()
     return {"job_id": job_id}
+
+
+STREAM_MAX_S = 280  # under Vercel's 300 s function limit (Hobby, Fluid compute)
+
+
+@app.post("/api/reports/stream")
+def stream_report(req: LlmInputRequest, x_access_code: str | None = Header(None)) -> StreamingResponse:
+    """Runs the report pipeline while the request stays open and streams its progress as NDJSON: one line per change,
+    same shape as GET /api/reports/{id} ({job_id, status, stage, done_stages, error}), plus {"heartbeat": true}
+    lines every 10 s. The last line has a final status (succeeded | invalid_report | failed). Works on Vercel because the
+    function stays alive as long as the response is streaming."""
+    require_access_code(x_access_code)
+    job_id, out, thread = _new_job(req)
+    thread.start()
+
+    def events():
+        last, t0, beat = None, _time.monotonic(), _time.monotonic()
+        while True:
+            p = _progress(job_id, out)
+            if p != last:
+                yield _json.dumps(p) + "\n"
+                last, beat = p, _time.monotonic()
+            if p["status"] != "running" and not thread.is_alive():
+                return
+            if _time.monotonic() - t0 > STREAM_MAX_S:
+                yield _json.dumps({**p, "status": "failed", "stage": None,
+                                   "error": {"stage": p.get("stage"), "message": "Report generation timed out."}}) + "\n"
+                return
+            if _time.monotonic() - beat > 10:
+                yield '{"heartbeat": true}\n'
+                beat = _time.monotonic()
+            _time.sleep(0.5)
+
+    return StreamingResponse(events(), media_type="application/x-ndjson",
+                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
 
 @app.get("/api/reports/{job_id}/photos/{name}")
@@ -147,6 +190,11 @@ def report_status(job_id: str) -> dict:
     out = _JOBS.get(job_id) or (REPORTS_DIR / job_id if _re.fullmatch(r"[a-z0-9-]{3,80}", job_id) else None)
     if not out or not (out / "metrics.json").exists():
         raise HTTPException(404, "Unknown report job.")
+    return _progress(job_id, out)
+
+
+def _progress(job_id: str, out: Path) -> dict:
+    """Status of a job from its metrics.json: {job_id, status, stage running now, done_stages, error}."""
     try:
         m = _json.loads((out / "metrics.json").read_text(encoding="utf-8"))
     except ValueError:  # being written
