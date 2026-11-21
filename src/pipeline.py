@@ -201,7 +201,11 @@ def _llm_input(request: dict, fs: dict, blocks: dict, calls: list, duration_ms: 
         "images": {n: {"label": ph["label"], "credit": ph.get("credit"), "shows": shows.get(n, ph["label"]),
                        "mime": "image/jpeg", "data_url": "data:image/jpeg;base64," + base64.b64encode(ph["jpeg"]).decode()}
                    for n, ph in images.items()},
-        "metrics": build_metrics(calls, duration_ms, cov["all"]["total"], cov["all"]["filled"]),
+        "metrics": build_metrics(calls, duration_ms, cov["all"]["total"], cov["all"]["filled"], external_calls={
+            # Google Street View Static API: metadata request = free; image = billed (10,000 free per month)
+            "google_streetview_metadata": 0 if blocks["facade"].get("note") == "no GOOGLE_MAPS_API_KEY" else 1,
+            "google_streetview_images": 1 if blocks["facade"].get("photos") else 0,
+        }),
     }
     return strip_binary(doc)
 
