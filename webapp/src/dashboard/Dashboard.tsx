@@ -4,7 +4,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import {
-  buildIndex, resolve, humanise, fmtInline, fmtHazard, fmtRange, fmtShare, isRange, isSynthetic, loadFromApi, loadFromFiles,
+  buildIndex, resolve, humanise, fmtInline, fmtHazard, fmtRange, fmtShare, isRange, isSynthetic, loadFromApi,
   READINESS, STATUS, PRICING, TARGET, PRIORITY_ORDER, FINDING_TYPE, type CaseData, type Index,
 } from "./data"
 import { getTicket, saveTicket, statusOf, inQueue, topPriority, QUEUES, STATUS_LABEL, STATUS_TONE, WORKFLOW, type Queue, type Status, type Ticket } from "./tickets"
@@ -26,16 +26,16 @@ const keyOf = (c: CaseData) => String(c.output?.case_id || c.bundle?.case?.case_
 
 export default function Dashboard() {
   const [cases, setCases] = useState<CaseData[] | null>(null)
-  const [api, setApi] = useState(true)
   const [open, setOpen] = useState<string | null>(() => new URLSearchParams(location.search).get("case"))
   const [queue, setQueue] = useState<Queue>("open")
   const [, bump] = useState(0)   // re-render after a ticket change
-  const pick = useRef<HTMLInputElement>(null)
-
-  const reload = () => loadFromApi().then((c) => { if (c) setCases(c); else { setApi(false); setCases((p) => p ?? []) } })
-  useEffect(() => { reload() }, [])
+  // the ticket list comes straight from the report folders; it refreshes itself every 20 s (new or finished tickets)
+  useEffect(() => {
+    const load = () => loadFromApi().then((c) => setCases((p) => c ?? p ?? []))
+    load(); const id = setInterval(load, 20000)
+    return () => clearInterval(id)
+  }, [])
   useEffect(() => { const u = new URL(location.href); if (open) u.searchParams.set("case", open); else u.searchParams.delete("case"); history.replaceState(null, "", u) }, [open])
-  const onFolder = async (e: React.ChangeEvent<HTMLInputElement>) => { if (e.target.files?.length) { const c = await loadFromFiles(e.target.files); setCases((p) => [...c, ...(p || []).filter((x) => !c.some((y) => y.id === x.id))]) } }
   const update = (id: string, patch: Partial<Ticket>) => { saveTicket(id, patch); bump((n) => n + 1) }
 
   const rows = (cases || []).map((c) => { const t = getTicket(c.id); return { c, t, s: statusOf(c, t) } })
@@ -45,7 +45,7 @@ export default function Dashboard() {
       <aside className="jr-side no-print">
         <button type="button" className="jr-brand" onClick={() => setOpen(null)}>
           <i><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinejoin="round" strokeLinecap="round"><path d="M3 11l9-7 9 7v9H3z" /><path d="M9 20v-6h6v6" /></svg></i>
-          <span><b>Alpenmark</b><small>Underwriting</small></span>
+          <span><b>Ticket desk</b><small>AXA underwriting team</small></span>
         </button>
         <p className="jr-side-h">Queues</p>
         <nav>{QUEUES.map(([q, label]) => (
@@ -53,11 +53,6 @@ export default function Dashboard() {
             <span>{label}</span><span className="jr-count">{rows.filter((x) => inQueue(q, x.s, x.t)).length}</span>
           </button>
         ))}</nav>
-        <div className="jr-side-f">
-          {api && <button type="button" className="jr-sidebtn" onClick={reload}>Refresh</button>}
-          <button type="button" className="jr-sidebtn" onClick={() => pick.current?.click()}>Open a case folder</button>
-          <input ref={pick} type="file" hidden multiple onChange={onFolder} {...({ webkitdirectory: "", directory: "" } as any)} />
-        </div>
       </aside>
       <main className="jr-main">
         {!cases ? <p className="jr-muted">Loading…</p>
@@ -102,7 +97,6 @@ function QueueView({ rows, title, onOpen, update }: { rows: { c: CaseData; t: Ti
   const dirLabel = (k: SortKey) => (k === "created" ? (sort.dir < 0 ? "newest first" : "oldest first") : k === "priority" ? (sort.dir > 0 ? "highest first" : "lowest first") : sort.dir > 0 ? "A to Z" : "Z to A")
   return (
     <>
-      <div className="jr-crumbs">Underwriting <span>/</span> Cases</div>
       <h1 className="jr-h1">{title}</h1>
       {!sorted.length ? <p className="jr-empty">No case in this queue.</p> : (
         <table className="jr-table">

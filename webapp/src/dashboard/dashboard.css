@@ -184,3 +184,4 @@ body{background:var(--canvas)}
 .jr-sort svg{opacity:.35}.jr-sort:hover svg{opacity:.8}.jr-sort.on{color:var(--brand)}.jr-sort.on svg{opacity:1}
 .jr-sort:focus-visible{outline:2px solid var(--brand);outline-offset:2px;border-radius:3px}
 .jr-date{white-space:nowrap;font-size:13px}
+.jr-main>.jr-h1:first-child{margin-top:6px}

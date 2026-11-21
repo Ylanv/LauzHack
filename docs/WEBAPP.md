@@ -70,9 +70,9 @@ uv venv .venv && uv pip install --python .venv/bin/python -r requirements.txt uv
   - It swims across the whole screen and speeds up behind the form so it never lingers there. It is shown on the form and sent screens only.
   - The media are **not in git**, because their licence forbids reposting them. Copy them from github.com/dwcminh/ascii-art/tree/main/BETTA-FISH into `webapp/public/original/` to see the fish. Without them there is no fish.
 
-## Underwriter dashboard (`/dashboard.html`, `src/dashboard/`)
+## Ticket desk for the AXA underwriting team (`/dashboard.html`, `src/dashboard/`)
 Back-office page for underwriters, built from `docs/FRONTEND_INTEGRATION.md`. It is **not linked from the client app** and must never be shown to clients.
-- **Data:** one folder per case, written by `python -m src.report --input <request.json> --output reports/<case>` (repo root). In dev, a Vite plugin (`webapp/vite.config.ts`) lists and serves `reports/` (change it with `REPORTS_DIR`). Anywhere else, "Open a case folder" reads a folder from disk. `reports/` is git-ignored because it can hold client data.
+- **Data:** one folder per case, written by `python -m src.report --input <request.json> --output reports/<case>` (repo root). In dev, a Vite plugin (`webapp/vite.config.ts`) lists and serves `reports/` (change it with `REPORTS_DIR`). The list refreshes itself every 20 s (new and finished tickets). `reports/` is git-ignored because it can hold client data.
 - **Jira-like tickets** (`src/dashboard/tickets.ts`): every report is a ticket.
   - Queues: All open · Assigned to me · Waiting for client · Resolved · All cases.
   - Columns: Type (declared activity), Key, Summary (company + address), Requester, Assignee, Priority (highest finding), Status.
