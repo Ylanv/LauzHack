@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "AXA Smart Property — pre-LLM output (llm_input.json) v2.0, Geneva",
+  "type": "object",
+  "required": ["schema_version", "generated_at", "request", "identification", "features", "feature_evidence",
+               "feature_coverage_before_llm", "sources", "evidence", "images", "metrics"],
+  "properties": {
+    "schema_version": { "const": "2.0-llm-input" },
+    "generated_at": { "type": "string" },
+    "request": {
+      "type": "object",
+      "required": ["client_name", "company_legal_name", "building_address", "industry_type"],
+      "properties": {
+        "client_name": { "type": "string" },
+        "company_legal_name": { "type": "string" },
+        "building_address": { "type": "string" },
+        "industry_type": { "type": ["string", "null"] }
+      }
+    },
+    "identification": {
+      "type": "object",
+      "required": ["company_name", "company_uid", "building_address", "building_egid", "canton",
+                   "estimated_market_value_chf", "annual_revenue_chf", "requested_coverages", "insurance_premium_estimate_chf"],
+      "properties": {
+        "canton": { "const": "GE" }
+      }
+    },
+    "features": {
+      "type": "array",
+      "minItems": 19,
+      "maxItems": 19,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["feature", "value", "status", "requires_verification"],
+        "properties": {
+          "feature": {
+            "enum": ["reconstruction_value_chf", "building_usage", "construction_material", "construction_year", "floor_area_m2",
+                     "number_of_floors", "roof_type_material", "building_renovations", "business_sector",
+                     "site_industrial_processes", "high_temperature_operations", "gas_installations",
+                     "flammable_material_storage", "earthquake_exposure", "flood_exposure", "surface_runoff_exposure",
+                     "hail_exposure", "landslide_exposure", "potential_repair_needs"]
+          },
+          "value": {},
+          "status": { "enum": ["verified", "observed", "inferred", "declared", "estimated", "unknown"] },
+          "requires_verification": { "type": "boolean" }
+        }
+      }
+    },
+    "feature_evidence": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["source_ids", "note"],
+        "properties": {
+          "source_ids": { "type": "array", "items": { "type": "string" } },
+          "note": { "type": ["string", "null"] }
+        }
+      }
+    },
+    "sources": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "provider", "kind", "url", "reliability"],
+        "properties": { "id": { "type": "string", "pattern": "^src_\\d+$" } }
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "required": ["public_data", "aerial_image", "website"]
+    },
+    "images": { "type": "object" },
+    "metrics": { "type": "object", "required": ["tool_calls", "tokens_input", "tokens_output", "cost_chf", "duration_ms"] }
+  }
+}

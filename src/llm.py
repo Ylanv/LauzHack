@@ -101,7 +101,12 @@ def llm_call(
             cache.set(key, data)
             return data, _metric(schema_name, started, tokens_in, tokens_out, model)
 
-        last_error = "; ".join(errors[:5])
+        finish = resp.choices[0].finish_reason
+        last_error = "; ".join(errors[:5]) + f" [finish_reason={finish}, chars={len(text)}]"
+        (config.CACHE_DIR / f"last_fail_{schema_name}.txt").write_text(text, encoding="utf-8") if not config.ON_VERCEL else None
+        if finish == "length":  # truncated output: same request with twice the room (re-sending a cut JSON makes it worse)
+            max_tokens *= 2
+            continue
         messages = messages + [
             {"role": "assistant", "content": text},
             {"role": "user", "content": f"Your JSON is invalid: {last_error}. Return corrected JSON only."},
@@ -125,7 +130,7 @@ def build_metrics(calls: list[dict], duration_ms: int, fields_applicable: int, f
 
 
 def _metric(tool: str, started: float, tokens_in: int, tokens_out: int, model: str, cache_hit: bool = False) -> dict:
-    """Matches report.schema.json → metrics.tool_calls[] (+ cost_chf/model kept for aggregation)."""
+    """One metric per LLM call (aggregated by build_metrics; _model/_cost_chf are internal)."""
     return {
         "tool": tool,
         "duration_ms": int((time.perf_counter() - started) * 1000),

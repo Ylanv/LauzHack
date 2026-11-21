@@ -2,32 +2,41 @@
 
 Local:  uvicorn src.main:app --reload
 Vercel: zero-config FastAPI detection (exports `app`).
+
+Scope: companies with their own activity building in the canton of Geneva.
+Inputs: client_name, company_legal_name (exact, Zefix), address (Geneva), industry_type (drop-down).
+
+POST /api/llm-input    → the pre-LLM JSON (identification, 19 features, evidence, sources) + images (base64)
+POST /api/report       → full report (adds the final-report LLM call)
+POST /api/report.html  → the rendered HTML report with photos
+GET  /api/industries   → drop-down values for industry_type
 """
 
-import json
+import base64
 import sys
-import uuid
-from datetime import datetime, timezone
 from pathlib import Path
+from typing import Literal
 
 # Make `src.*` imports work whatever the working directory (local or Vercel).
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from fastapi import FastAPI, HTTPException  # noqa: E402
-from pydantic import BaseModel  # noqa: E402
+from fastapi.responses import HTMLResponse  # noqa: E402
+from pydantic import BaseModel, Field  # noqa: E402
 
 from src import config  # noqa: E402
-from src.validate_report import validate  # noqa: E402
+from src.industries import INDUSTRIES  # noqa: E402
 
 app = FastAPI(title="AXA Smart Property")
 
-EXAMPLE = config.ROOT / "schemas" / "report.example.json"
-
 
 class ReportRequest(BaseModel):
-    client_name: str
-    company_legal_name: str
-    address: str
+    client_name: str = Field(..., min_length=1, description="Contact person / client name", examples=["Marie Dupont"])
+    company_legal_name: str = Field(..., description="Exact registered company name (Zefix)", examples=["CMDS SA"])
+    address: str = Field(..., description="Building address in Geneva: 'Street N, NPA Town'",
+                         examples=["Rue du Champ-Blanchod 7, 1228 Plan-les-Ouates"])
+    industry_type: Literal[tuple(INDUSTRIES)] = Field(..., description="Declared by the client (see GET /api/industries)")
+    website: str | None = Field(None, description="Optional technical hint (not in the client form)")
 
 
 @app.get("/api/health")
@@ -35,28 +44,45 @@ def health() -> dict:
     return {
         "status": "ok",
         "on_vercel": config.ON_VERCEL,
-        "mock_mode": config.MOCK_MODE,
         "llm_configured": bool(config.LLM_API_KEY),
-        "models": {role: bool(m) for role, m in config.MODELS.items()},
+        "models": {role: m or None for role, m in config.MODELS.items()},
+        "streetview_configured": bool(config.GOOGLE_MAPS_API_KEY),
         "cache": "upstash" if config.UPSTASH_REDIS_REST_URL else "file",
     }
 
 
+@app.get("/api/industries")
+def industries() -> list[dict]:
+    return [{"key": k, "label": v[0]} for k, v in INDUSTRIES.items()]
+
+
+def _run(req: ReportRequest, **kw) -> dict:
+    from src.pipeline import InputError, ServiceError, run
+    try:
+        return run(req.client_name, req.company_legal_name, req.address, req.industry_type, req.website, **kw)
+    except InputError as e:  # not found / ambiguous / out of scope → user error, no report
+        raise HTTPException(422, str(e)) from e
+    except ServiceError as e:  # public data service down / timeout → retry
+        raise HTTPException(503, f"A public data service did not respond, please retry ({e})") from e
+
+
+@app.post("/api/llm-input")
+def create_llm_input(req: ReportRequest) -> dict:
+    """Everything up to the final LLM (vision on the images included). Images as base64 data URLs."""
+    res = _run(req, final_report=False)
+    images = {name: "data:image/jpeg;base64," + base64.b64encode(jpeg).decode() for name, jpeg in res["images"].items()}
+    return {"llm_input": res["llm_input"], "images": images}
+
+
 @app.post("/api/report")
 def create_report(req: ReportRequest) -> dict:
-    if not config.MOCK_MODE:
-        # TODO: brancher la pipeline (resolve → tools en parallèle → assembler → synthesize).
-        raise HTTPException(501, "Pipeline not implemented yet — set MOCK_MODE=1")
+    res = _run(req)
+    return {k: v for k, v in res.items() if k != "html"}
 
-    report = json.loads(EXAMPLE.read_text(encoding="utf-8"))
-    report["report_id"] = str(uuid.uuid4())
-    report["generated_at"] = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
-    report["request"] = req.model_dump()
 
-    errors = validate(report)
-    if errors:
-        raise HTTPException(500, {"validation_errors": errors})
-    return report
+@app.post("/api/report.html", response_class=HTMLResponse)
+def create_report_html(req: ReportRequest) -> str:
+    return _run(req)["html"]
 
 
 if __name__ == "__main__":
