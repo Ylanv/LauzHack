@@ -5,8 +5,8 @@ Read this before changing `webapp/`. `frontend/index.html` is a different page: 
 ## In one paragraph
 A client-facing pre-assessment page for commercial building insurance (fictional brand **Alpenmark**), for buildings in the **canton of Geneva**.
 1. The client fills a short form.
-2. The web app makes **one live call** to the backend (`POST /api/llm-input?for_llm=true`).
-3. A waiting screen flies a map from the globe down to the building until the backend answers.
+2. The web app starts **one report job** on the backend (`POST /api/reports`: ETL → LLM report → validation).
+3. A waiting screen flies a map from the globe down to the building and follows the job until the report is generated.
 4. A "request sent" screen closes the flow.
 
 The client never sees a risk score, tokens, cost or the underwriting document. The UI is in English and uses only the palette `#3d52a0 #7091e6 #8697c4 #adbbda #ede8f5` (ink `#1c2250`). The zone colours in the satellite window are the one exception.
@@ -50,14 +50,19 @@ uv venv .venv && uv pip install --python .venv/bin/python -r requirements.txt uv
 
 "Fill with the demo case" fills in Marie Dupont, CMDS SA, Rue du Champ-Blanchod 7, 1228 Plan-les-Ouates, with metalworking preselected.
 
-### Live call and errors (`src/pipeline/index.ts`)
-- `runAssessment()` sends **one** `POST /api/llm-input` per submission (full version; the LLM version is derived locally).
-- The waiting timeline waits inside its last step ("Putting the file together") until the response arrives. A success then finishes the animation. The document is shown only in the team review panel (JSON button when the map is paused), never on the client screens.
+### Live report and errors (`src/pipeline/index.ts`, backend `src/main.py`)
+- On submit, `startReport()` sends **one** `POST /api/reports`. The backend starts the full report pipeline in the background (ETL → LLM report → validation, `src/report/pipeline.py`) and answers `{ job_id }`. The client polls `GET /api/reports/{job_id}` every 1.5 s, which returns `status` and the running `stage` (`etl`, `features`, `llm`, `validate`), never the report.
+- The waiting screen follows the real pipeline and never runs ahead of it:
+  - While the ETL runs, the timeline waits before its last step.
+  - After the ETL, it waits inside "Putting the file together". The companion says "Writing the report" (LLM) and then "Checking the report" (validation).
+  - The confirmation screen ("Your request has been sent") appears **only when the report is valid** and stored in `reports/<job_id>/` for the team (see the dashboard).
+- The job folder is the case read by the underwriter dashboard. In team review ("Pause at end"), "Open report" opens it there.
 - Errors bring the client back to the form **with every value kept**, and a message in a banner. There are no automatic retries.
-  - **401:** access code missing or wrong. The code field appears and gets focus.
-  - **422:** the backend's `detail` is shown (for example: no company registered under that exact name).
-  - **503** or the network: a "Try again" button sends the same values once more.
-
+  - **401:** access code missing or wrong.
+  - **422** or ETL "input rejected": the backend's message is shown (for example: no company registered under that exact name).
+  - **Public service down, invalid report, connection lost:** a "Try again" button sends the same values once more.
+- Locally without an LLM key: start the backend with `REPORT_MODEL=mock` (free, minimal report). The background job needs a long-running server: it is not meant for Vercel's serverless functions.
+- Dev: `/?autorun&live` runs the demo case through the live pipeline.
 ### Background and companion
 - **Companion:** `components/Companion.tsx`, a WebGL sprite in `CobaltSprite.tsx` with the moods idle, working, happy and puzzled.
 - **Fish:** the original ASCII betta by @dwcminh.ascii, played from the repo's own `reel.mp4` (fallback: `preview.gif`) in `lib/background.ts`.
@@ -96,3 +101,10 @@ Back-office page for underwriters, built from `docs/FRONTEND_INTEGRATION.md`. It
 - Unknown stays unknown.
 - The UI is light and soft (rounded, palette colours) and accessible: labels, `aria-live` status, reduced-motion support.
 - Before a PR, run `npx tsc --noEmit` in `webapp/`.
+
+## Handoff: running the client web app with real API keys
+1. Repo root: put the keys in `.env` (see `.env.example`; never committed): vision (OpenRouter), facade (Google) and the report model's key (default config `claude_opus55`, see `models/configs.json`; `REPORT_MODEL` picks another one).
+2. Backend: `.venv/bin/python -m uvicorn src.main:app --port 8000` (without `REPORT_MODEL=mock`).
+3. Web app: `cd webapp && npm install && npx vite --port 5173`, open http://localhost:5173 and send the demo case.
+4. Check that the waiting screen lasts as long as the real pipeline (ETL + vision + LLM report) and that the confirmation only appears when `reports/<job_id>/output.json` exists. The report then shows in http://localhost:5173/dashboard.html.
+5. Not verified yet with real keys: real durations, vision stages, the LLM report content, the `invalid_report` path. The background job needs a long-running server (not Vercel serverless).

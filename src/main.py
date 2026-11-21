@@ -9,6 +9,8 @@ Inputs: client_name, company_legal_name (exact, Zefix), address (Geneva), indust
 GET  /                                → simple frontend (form + result)
 POST /api/llm-input                    → llm_input.json (photos embedded as base64, for the report)
 POST /api/llm-input?for_llm=true       → same JSON without the photos (what the final-report LLM receives)
+POST /api/reports                      → starts the full report pipeline (ETL → LLM → validated report) → {job_id}
+GET  /api/reports/{job_id}             → progress of that job: status + current stage (never the report itself)
 GET  /api/industries                   → drop-down values for industry_type
 GET  /api/health                       → configuration check
 """
@@ -80,6 +82,54 @@ def create_llm_input(req: LlmInputRequest, for_llm: bool = False,
         raise HTTPException(503, f"A public data service did not respond, please retry ({e})") from e
     return for_llm_text(doc) if for_llm else doc
 
+
+# ---- Full report pipeline, run in the background so the client web app can follow its progress -------------------
+# Each job writes its folder under REPORTS_DIR (default <repo>/reports, /tmp on Vercel): output.json, features_combined.json,
+# metrics.json... read by the underwriter dashboard (webapp/dashboard.html). The client only gets status + stage.
+# Note: a background thread does not outlive a serverless request; this is meant for a long-running server (local/VM).
+import re as _re  # noqa: E402
+import threading  # noqa: E402
+import time as _time  # noqa: E402
+import json as _json  # noqa: E402
+import os as _os  # noqa: E402
+
+REPORTS_DIR = Path(_os.environ.get("REPORTS_DIR") or ("/tmp/reports" if config.ON_VERCEL else config.ROOT / "reports"))
+_JOBS: dict[str, Path] = {}
+
+
+@app.post("/api/reports", status_code=202)
+def start_report(req: LlmInputRequest, x_access_code: str | None = Header(None)) -> dict:
+    if config.ACCESS_CODE and x_access_code != config.ACCESS_CODE:
+        raise HTTPException(401, "Invalid or missing access code (X-Access-Code header).")
+    from src.report import pipeline as report_pipeline
+    slug = _re.sub(r"[^a-z0-9]+", "-", req.company_legal_name.lower()).strip("-")[:40] or "case"
+    job_id = f"{slug}-{_time.strftime('%Y%m%d-%H%M%S')}"
+    out = REPORTS_DIR / job_id
+    out.mkdir(parents=True, exist_ok=True)
+    (out / "metrics.json").write_text(_json.dumps({"status": "running", "stages": []}), encoding="utf-8")
+    doc = {"schema_version": "1.0-customer-request", "case_id": job_id, "client_name": req.client_name,
+           "company_legal_name": req.company_legal_name, "building_address": req.address,
+           "industry_type": req.industry_type, "website": req.website}
+    _JOBS[job_id] = out
+    threading.Thread(target=report_pipeline.run, args=(doc, out), daemon=True).start()
+    return {"job_id": job_id}
+
+
+@app.get("/api/reports/{job_id}")
+def report_status(job_id: str) -> dict:
+    out = _JOBS.get(job_id) or (REPORTS_DIR / job_id if _re.fullmatch(r"[a-z0-9-]{3,80}", job_id) else None)
+    if not out or not (out / "metrics.json").exists():
+        raise HTTPException(404, "Unknown report job.")
+    try:
+        m = _json.loads((out / "metrics.json").read_text(encoding="utf-8"))
+    except ValueError:  # being written
+        return {"job_id": job_id, "status": "running", "stage": None, "done_stages": []}
+    done = [s["stage"] for s in m.get("stages", []) if s.get("status") != "failed"]
+    nxt = {None: "etl", "etl": "features", "features": "llm", "llm": "validate"}
+    stage = None if m.get("status") != "running" else nxt.get(done[-1] if done else None, "validate")
+    err = m.get("error") or {}
+    return {"job_id": job_id, "status": m.get("status", "running"), "stage": stage, "done_stages": done,
+            "error": {"stage": err.get("stage"), "message": err.get("message")} if err else None}
 
 if __name__ == "__main__":
     print("Run with: uvicorn src.main:app --reload")

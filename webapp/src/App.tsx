@@ -4,12 +4,14 @@ import FormScreen, { type ServerError } from "./components/FormScreen"
 import Flight from "./components/Flight"
 import DoneScreen from "./components/DoneScreen"
 import ReviewBar from "./components/ReviewBar"
-import JsonPanel from "./components/JsonPanel"
 import { MapFlight } from "./lib/mapFlight"
 import { paintBackground, paintFish } from "./lib/background"
 import { clamp, reducedMotion } from "./lib/utils"
 import { MOCK, INSIGHTS } from "./pipeline/mock"
-import { DEMO, runAssessment, AssessError, type LlmInput } from "./pipeline"
+import { DEMO, startReport, reportStatus, progressError, AssessError } from "./pipeline"
+
+/** what the companion says while a real backend stage runs (after the simulated ETL steps) */
+const STAGE_LABEL: Record<string, string> = { features: "Putting the file together", llm: "Writing the report", validate: "Checking the report" }
 import type { Coords, FlightInput, RequestInput, StepId } from "./pipeline/types"
 
 type Screen = "form" | "proc" | "done"
@@ -44,8 +46,7 @@ export default function App() {
   const [variant, setVariant] = useState<"A" | "B">(qp.get("ui") === "A" ? "A" : "B")   // B chosen by the team; ?ui=A keeps the satellite-window layout for comparison
   const [pause, setPause] = useState(qp.get("pause") !== "0")   // review mode: hold the map when it has finished processing
   const [held, setHeld] = useState(false)
-  const [doc, setDoc] = useState<LlmInput | null>(null)   // backend output: team review panel only
-  const [showJson, setShowJson] = useState(false)
+  const [job, setJob] = useState<string | null>(null)   // report job id: link to the underwriter dashboard (team review only)
   const pauseRef = useRef(pause); pauseRef.current = pause
   const run = useRef<any>(null)
   const coords = useRef<Coords>({ ...MOCK.coords })
@@ -69,19 +70,34 @@ export default function App() {
 
   // send the file on (end of the waiting screen)
   const complete = useCallback(() => {
-    setHeld(false); setShowJson(false)
+    setHeld(false)
     if (!run.current) return
     setTimeout(() => { setFade(true); setTimeout(finish, 650) }, 900)
   }, [finish])
 
   const start = (i: RequestInput, c: Coords, accessCode = "") => {
     coords.current = c; setServerError(null)
-    setInput(i); setScreen("proc"); setMood("working"); setStepState({}); setCurrent("Starting"); setFade(false); setHeld(false); setDoc(null); setShowJson(false)
+    setInput(i); setScreen("proc"); setMood("working"); setStepState({}); setCurrent("Starting"); setFade(false); setHeld(false); setJob(null)
     ;MapFlight.reset(); MapFlight.update({ step: "identity", progress: 0, coords: c })
     setLive("Preparing your file")
-    const r = run.current = { tv: Number(new URLSearchParams(location.search).get("at")) || 0, last: performance.now(), done: false, said: {}, ins: {}, st: {}, live: DEMO ? "ok" : "pending", err: null as AssessError | null, input: i, coords: c }
-    // live: one backend call per submission; the waiting screen only completes when it has answered (demo flow: simulated)
-    if (!DEMO) runAssessment(i, accessCode).then((d) => { if (run.current === r) { r.live = "ok"; setDoc(d) } }).catch((e) => { if (run.current === r) { r.live = "error"; r.err = e instanceof AssessError ? e : new AssessError("service", "The assessment service had a problem. Your details are kept, please try again.") } })
+    const r = run.current = { tv: Number(new URLSearchParams(location.search).get("at")) || 0, last: performance.now(), done: false, said: {}, ins: {}, st: {}, live: DEMO ? "ok" : "pending", stage: null as string | null, etlDone: false, err: null as AssessError | null, input: i, coords: c }
+    // live: one report job per submission (ETL → LLM report → validation); the waiting screen follows its real stages
+    // and only completes once the report has been generated and stored for the team (demo flow: simulated)
+    if (!DEMO) {
+      const fail = (e: unknown) => { if (run.current === r) { r.live = "error"; r.err = e instanceof AssessError ? e : new AssessError("service", "The assessment service had a problem. Your details are kept, please try again.") } }
+      let misses = 0
+      const poll = (id: string) => {
+        if (run.current !== r) return
+        reportStatus(id).then((p) => {
+          misses = 0
+          r.stage = p.stage; r.etlDone = p.done_stages.includes("etl")
+          if (p.status === "succeeded") { r.live = "ok"; setJob(id) }
+          else if (p.status === "running") setTimeout(() => poll(id), 1500)
+          else fail(progressError(p))
+        }).catch(() => { if (++misses >= 5) fail(new AssessError("service", "We lost the connection to the assessment service. Your details are kept, please try again.")); else setTimeout(() => poll(id), 2500) })
+      }
+      startReport(i, accessCode).then(poll).catch(fail)
+    }
     scrollTo(0, 0)
   }
 
@@ -103,8 +119,9 @@ export default function App() {
           setScreen("form"); setMood("puzzled"); setLive(r.err.message)
           window.clearTimeout(moodTimer.current); moodTimer.current = window.setTimeout(() => setMood("idle"), 2500)
         } else if (r && !r.done) {
-          // until the backend has answered, the timeline waits inside the last step ("Putting the file together")
-          const cap = r.live === "ok" ? TOTAL : STEP("file").start + STEP("file").dur * 0.6
+          // the timeline never runs ahead of the backend: while the ETL runs it waits before the last step; once the ETL
+          // is done it waits inside "Putting the file together" (report writing); it ends only when the report is valid
+          const cap = r.live === "ok" ? TOTAL : r.etlDone ? STEP("file").start + STEP("file").dur * 0.6 : STEP("file").start - 0.3
           const hold = (() => { const h = location.search.match(/hold=?([\d.]*)/); return h ? (h[1] ? +h[1] : 15) : TOTAL })()
           r.tv = Math.min(hold, cap, r.tv + clamp((now - r.last) / 1000, 0, 0.25) * (r.live === "ok" && !DEMO ? 2.5 : 1)); r.last = now
           let changed = false
@@ -120,7 +137,7 @@ export default function App() {
           INSIGHTS.forEach((d) => { if (!r.ins[d.id] && prog(d.at[0], r.tv) >= d.at[1]) { r.ins[d.id] = 1; MapFlight.pushInsight(d) } })
           MapFlight.update({ ...flightInput(r.tv), coords: coords.current })
           const cur = MOCK.steps.filter((s) => r.tv >= s.start && r.tv < s.start + s.dur).pop()
-          setCurrent(cur ? cur.label : "Finishing")
+          setCurrent(!DEMO && r.live !== "ok" && r.etlDone && r.stage && STAGE_LABEL[r.stage] ? STAGE_LABEL[r.stage] : cur ? cur.label : "Finishing")
           if (r.tv >= TOTAL) {
             r.done = true
             if (pauseRef.current) setHeld(true); else complete()
@@ -155,8 +172,7 @@ export default function App() {
         </main>
       </div>
       <Flight hidden={screen !== "proc"} fade={fade} skipped={skipped} onSkip={skip}>
-        <ReviewBar variant={variant} onVariant={setVariant} pause={pause} onPause={(v) => { setPause(v); if (!v && held) complete() }} held={held} onContinue={complete} hasJson={!!doc} onJson={() => setShowJson(true)} />
-        {showJson && doc && <JsonPanel doc={doc} onClose={() => setShowJson(false)} />}
+        <ReviewBar variant={variant} onVariant={setVariant} pause={pause} onPause={(v) => { setPause(v); if (!v && held) complete() }} held={held} onContinue={complete} reportHref={job ? `/dashboard.html?case=${encodeURIComponent(job)}` : undefined} />
       </Flight>
       <Companion mood={mood} bubble={bubble.t} bubbleKey={bubble.n} status={status} />
     </>

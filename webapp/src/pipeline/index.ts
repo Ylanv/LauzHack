@@ -1,8 +1,8 @@
 import type { RequestInput } from "./types"
 import { DEMO_INDUSTRIES } from "./mock"
 
-/** Explicit demo flow (?demo or ?autorun): fully simulated, no backend call. Every other submission is live. */
-export const DEMO = typeof location !== "undefined" && /[?&](demo|autorun)\b/.test(location.search)
+/** Explicit demo flow (?demo, or ?autorun without &live): fully simulated, no backend call. Every other submission is live. */
+export const DEMO = typeof location !== "undefined" && (/[?&]demo\b/.test(location.search) || (/[?&]autorun\b/.test(location.search) && !/[?&]live\b/.test(location.search)))
 
 export interface Industry { key: string; label: string }
 
@@ -25,30 +25,37 @@ export async function accessCodeRequired(): Promise<boolean> {
 export type AssessErrorKind = "code" | "input" | "service"
 export class AssessError extends Error { constructor(public kind: AssessErrorKind, message: string) { super(message) } }
 
-/** One live assessment per submission: POST /api/llm-input (full version, photos included; the LLM version is derived
- *  locally with forLlm()). The document is for the underwriter: never shown on the client screens, only in the team
- *  review panel. The endpoint gives no tracking reference. Never retried automatically. */
-export async function runAssessment(i: RequestInput, accessCode?: string): Promise<LlmInput> {
+/** One live report per submission: POST /api/reports starts the full pipeline (ETL → LLM report → validation) on the
+ *  backend and returns a job id. The client never receives the report: underwriters read it in the dashboard.
+ *  Never retried automatically. */
+export async function startReport(i: RequestInput, accessCode?: string): Promise<string> {
   let r: Response
   try {
-    r = await fetch("/api/llm-input", {
+    r = await fetch("/api/reports", {
       method: "POST",
       headers: { "Content-Type": "application/json", ...(accessCode ? { "X-Access-Code": accessCode } : {}) },
       body: JSON.stringify({ client_name: i.contact, company_legal_name: i.company, address: i.address, industry_type: i.industry }),
     })
   } catch { throw new AssessError("service", "We could not reach the assessment service. Your details are kept, please try again.") }
-  if (r.ok) return r.json()
+  if (r.ok) return (await r.json()).job_id
   let detail = ""
   try { const j = await r.json(); detail = typeof j.detail === "string" ? j.detail : Array.isArray(j.detail) ? j.detail.map((d: { msg?: string }) => d.msg).filter(Boolean).join("; ") : "" } catch { /* no body */ }
   if (r.status === 401) throw new AssessError("code", "The access code is missing or not valid.")
   if (r.status === 422) throw new AssessError("input", detail || "Some details could not be matched. Please check them.")
-  if (r.status === 503) throw new AssessError("service", "A public data service did not respond. Your details are kept, please try again.")
   throw new AssessError("service", "The assessment service had a problem. Your details are kept, please try again.")
 }
 
-/** llm_input.json as returned by the backend (schemas/llm_input.schema.json); only the parts the web app touches are typed */
-export interface LlmInput { identification?: { company_name?: string }; images?: Record<string, { data_url?: string; label?: string }>; [k: string]: unknown }
-/** Same document without the base64 photos: what the final-report LLM receives (= backend for_llm_text) */
-export function forLlm(d: LlmInput): LlmInput {
-  const c = structuredClone(d); Object.values(c.images || {}).forEach((i) => { delete i.data_url }); return c
+/** Progress of a report job (GET /api/reports/{id}): status and the stage running now (etl, features, llm, validate). */
+export interface ReportProgress { job_id: string; status: "running" | "succeeded" | "invalid_report" | "failed"; stage: string | null; done_stages: string[]; error: { stage?: string; message?: string } | null }
+export async function reportStatus(job: string): Promise<ReportProgress> {
+  const r = await fetch(`/api/reports/${encodeURIComponent(job)}`, { cache: "no-store" })
+  if (!r.ok) throw new Error("status " + r.status)
+  return r.json()
+}
+/** What to tell the client when the job ended without a valid report */
+export function progressError(p: ReportProgress): AssessError {
+  const m = p.error?.message || ""
+  if (p.status === "failed" && /^input rejected: /i.test(m)) return new AssessError("input", m.replace(/^input rejected: /i, ""))
+  if (p.status === "failed" && /^public service unavailable/i.test(m)) return new AssessError("service", "A public data service did not respond. Your details are kept, please try again.")
+  return new AssessError("service", "We could not finish your file. Your details are kept, please try again.")
 }
