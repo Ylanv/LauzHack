@@ -12,13 +12,22 @@ Hackathon AXA B2B · LauzHack 2026
 schemas/report.schema.json    # contrat agent ↔ backend ↔ frontend
 schemas/report.example.json   # exemple complet et valide (fictif)
 prompts/system.md             # règles LLM + I/O des 3 appels
+src/main.py                   # API FastAPI (déployée sur Vercel)
+src/llm.py                    # TOUS les appels LLM passent par ici : routing, json_schema, cache, tokens, coût
+src/cache.py                  # cache Upstash Redis (prod) / fichiers (local)
+src/config.py                 # variables d'env, modèles, prix CHF hardcodés
 src/validate_report.py        # validation schéma + traçabilité des sources
+.env.example                  # variables à définir
 ```
 
 ```bash
-python -m venv .venv && .venv/Scripts/pip install -r requirements.txt
-python -m src.validate_report schemas/report.example.json   # → OK
+python -m venv .venv && .venv/Scripts/pip install -r requirements.txt uvicorn
+cp .env.example .env                                         # remplir la clé + les modèles
+python -m src.validate_report schemas/report.example.json    # → OK
+uvicorn src.main:app --reload                                # GET /api/health · POST /api/report
 ```
+
+`MOCK_MODE=1` (défaut) : `POST /api/report` renvoie l'exemple validé avec la requête injectée → le front peut avancer sans pipeline et sans tokens.
 
 ---
 
@@ -211,12 +220,38 @@ Règles :
 
 ---
 
-## 6. Stack
+## 6. Stack, modèles & hébergement
 
-- **Backend :** Python + FastAPI · GeoPandas, Shapely, Rasterio, httpx · `jsonschema`
-- **LLM :** structured output imposé par schéma
-- **Stockage :** SQLite + fichiers géo prétraités (PostGIS si besoin plus tard)
-- **Front (plus tard) :** Next.js, rendu depuis `report.json`
+**Rien ne tourne en local côté modèles.** Pas de GPU, pas d'endpoint dédié : on appelle des **API serverless au token**, toutes compatibles OpenAI → un seul client (`src/llm.py`), on change de fournisseur avec `LLM_BASE_URL`.
+
+| Rôle | Fournisseur |
+|---|---|
+| Principal | **OpenRouter** — clé AXA ($10). Jury = fournisseur de la clé : tenir dans ce budget est un argument. |
+| Secours | **Together** ou **Nebius Token Factory** (API au token, pas les endpoints GPU Nebius) |
+| À éviter | GPU / endpoints dédiés : facturés à l'heure même idle, setup long |
+
+**Cascade de modèles** (`MODEL_VISION`, `MODEL_EXTRACTION`, `MODEL_SYNTHESIS`) : petit VLM pour les images, petit modèle texte pour l'extraction, modèle plus capable **uniquement** pour la synthèse. Vérifier chez le fournisseur que chaque modèle accepte les images (vision) et `response_format: json_schema`. Tester 2–3 candidats par rôle sur les bâtiments du benchmark, garder le moins cher qui passe le validateur.
+
+**Règles `src/llm.py`** (ne jamais appeler le SDK directement ailleurs) :
+- sortie `json_schema` stricte + validation `jsonschema` + **1 retry** max avec l'erreur ;
+- **cache** par hash (modèle + messages + schéma + images) → un appel identique n'est jamais repayé (dev compris : protège les $10) ;
+- chaque appel renvoie sa métrique (durée, tokens, cache_hit, coût) → `build_metrics()` remplit `metrics` ;
+- coût en CHF via `MODEL_PRICES_CHF_PER_MTOK` dans `src/config.py` (prix hardcodés, approximatifs — à remplir).
+
+### Déploiement Vercel (cible finale)
+
+Le backend est une **app FastAPI = une seule fonction Python** sur Vercel (détection zero-config, Python 3.13 via `.python-version`). Contraintes à respecter **dès maintenant** :
+
+| Contrainte Vercel | Conséquence pour nous |
+|---|---|
+| Filesystem en lecture seule, `/tmp` éphémère | **Pas de cache/DB sur disque en prod** → Upstash Redis (Vercel Marketplace, REST) ; `src/cache.py` bascule tout seul si `UPSTASH_*`/`KV_*` est défini. Pas de SQLite. |
+| Aucune mémoire entre requêtes | Pas d'état global ; tout passe par le cache ou le `report.json` |
+| Durée max 300 s (Hobby) | Pipeline cible **< 60 s** ; branches en parallèle ; recherche web plafonnée |
+| Bundle Python 500 Mo | **Pas de GeoPandas.** Préférer les API geo.admin.ch (Identify/Find renvoient les attributs côté serveur) ; `shapely` pour la géométrie ; `rasterio` seulement si nécessaire (lecture COG à distance par range requests, pas de téléchargement de rasters entiers) |
+| Body requête/réponse ≤ 4.5 Mo | Les images sont **récupérées côté serveur**, jamais uploadées par le client ; le rapport renvoie des URL, pas d'images en base64 |
+| Variables d'env | Dans Vercel → Settings → Environment Variables (`vercel env add`), jamais commitées |
+
+Plus tard, quand le site arrive : Next.js et FastAPI dans **le même projet Vercel** via `services` dans `vercel.json` (`/api/*` → backend, le reste → front), et progression de la pipeline en streaming (SSE) vers l'UI.
 
 ---
 
@@ -235,6 +270,18 @@ Règles :
 **MVP obligatoire (bout en bout) :** 3 champs → EGID → RegBL → ruissellement/séisme/grêle → 1 image analysée → 1 recherche industrielle sourcée → `report.json` qui passe `validate_report`.
 
 **Extensions :** cartes cantonales (crues, glissements, chutes de pierres, avalanches), estimation de reconstruction, investigation des protections, rendu UI/PDF.
+
+### Bonus — Vision sur les photos du site de l'entreprise
+
+L'orthophoto montre le toit, pas le risque incendie. Les pages *production*, *Über uns* et les brochures montrent souvent l'intérieur : **fours, citernes de gaz, stockage de palettes/solvants, sprinklers au plafond**. C'est là que l'image apporte le plus à AXA, et c'est exactement ce que les registres ne donnent pas.
+
+Tool `analyze_site_photos()`, branché après `investigate_company()` :
+
+1. **Sélection sans LLM** des images déjà récupérées par la recherche web : `alt`, nom de fichier, mots-clés de la page (`production`, `Fertigung`, `atelier`, `Halle`…), taille minimale (ignorer logos/icônes), dédoublonnage. **Max 2–3 images.**
+2. **Petit VLM bon marché**, image redimensionnée (~512–768 px), sortie en sous-schéma : présence de fours / citernes / stockage inflammable / sprinklers / détection.
+3. Résultat → `fire_exposure.*` et `protection_systems[]` avec une source `kind: "company_photo"`, `reliability: "observed"`, `building_specific: false` tant que rien ne rattache la photo à **cette adresse**.
+
+Budget : 2–3 images + ~200 tokens output. Stop si aucune image ne passe le filtre (0 appel).
 
 ---
 

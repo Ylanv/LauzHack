@@ -419,6 +419,7 @@
             "official_geodata",
             "aerial_image",
             "company_website",
+            "company_photo",
             "public_document",
             "derived_calculation",
             "other"
