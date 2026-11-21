@@ -5,6 +5,8 @@ Optional technical hint: website (improves block 3; not part of the client form)
 Everything else is researched automatically or marked unknown.
 """
 
+import base64
+import copy
 import re
 import time
 import uuid
@@ -200,6 +202,14 @@ def llm_input(client_name, company, address, fs, blocks, duration_ms, calls=(), 
             name = {"aerial_image": "orthophoto.jpg", "facade": "facade_streetview.jpg"}.get(key, f"website_{i + 1}.jpg")
             images[name] = {"jpeg": ph["jpeg"], "label": ph["label"], "credit": ph.get("credit")}
     cov = feat.coverage(fs["features"])
+    aer = blocks.get("aerial_image", {}).get("data") or {}
+    fac = blocks.get("facade", {}).get("data") or {}
+    webd = blocks.get("website", {}).get("data") or {}
+    shows = {"orthophoto.jpg": "; ".join(aer.get("observations") or []) or "aerial view of the building (outlined in red)",
+             "facade_streetview.jpg": ("; ".join(fac.get("observations") or []) if fac.get("facade_visible")
+                                       else "street view towards the building (facade not clearly visible)")}
+    for i, obs in enumerate(webd.get("photo_observations") or []):
+        shows[f"website_{i + 1}.jpg"] = obs
     payload = {
         "schema_version": "2.0-llm-input",
         "generated_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
@@ -224,7 +234,22 @@ def llm_input(client_name, company, address, fs, blocks, duration_ms, calls=(), 
                         "raw": blocks["website"].get("raw"), "note": blocks["website"].get("note"),
                         "images": [n for n in images if n.startswith("website_")]},
         },
-        "images": {n: {"label": v["label"], "credit": v["credit"]} for n, v in images.items()},
+        # Photos embedded for the REPORT (base64 data URLs). Never sent to the LLM: use for_llm_text() before the
+        # final-report call; the LLM references photos by name and the renderer inserts the data_url.
+        "images": {n: {"label": v["label"], "credit": v["credit"], "shows": shows.get(n, v["label"]), "mime": "image/jpeg",
+                       "data_url": "data:image/jpeg;base64," + base64.b64encode(v["jpeg"]).decode()}
+                   for n, v in images.items()},
         "metrics": build_metrics(list(calls), duration_ms, cov["all"]["total"], cov["all"]["filled"]),
     }
     return {"llm_input": strip_binary(payload), "images": {n: v["jpeg"] for n, v in images.items()}}
+
+
+def for_llm_text(llm_input: dict) -> dict:
+    """The JSON to send to the final-report LLM: identical, minus the base64 photos.
+    Photos are NOT sent to the LLM (already analysed by the vision step). The LLM only sees the catalogue
+    images[name] = {label, shows, credit} and references photos BY NAME in the report (e.g. "facade_streetview.jpg");
+    the report renderer then inserts llm_input.images[name].data_url."""
+    doc = copy.deepcopy(llm_input)
+    for img in (doc.get("images") or {}).values():
+        img.pop("data_url", None)
+    return doc

@@ -53,6 +53,8 @@ USAGE = {1110: "single-family house", 1121: "two-family house", 1122: "apartment
          1274: "other non-residential"}
 
 PRESENT = {"confirmed_present", "possible"}
+# Cantonal hazard map levels (official German codes) -> English
+LEVEL_EN = {"nicht_gefaehrdet": "none", "restgefaehrdung": "residual", "gering": "low", "mittel": "medium", "erheblich": "high"}
 
 
 class Sources:
@@ -71,6 +73,8 @@ class Sources:
 
 def _rec(key, value, status, src=(), note=None, verify=None):
     group, rel, comps, prio = CATALOG[key]
+    if isinstance(value, list):
+        value = list(dict.fromkeys(value))
     if value in (None, "", [], "unknown"):
         value, status = None, "unknown"
     value = {"confirmed_present": "present", "possible": "possible", "confirmed_absent": "absent"}.get(value, value)         if isinstance(value, str) else value
@@ -258,11 +262,14 @@ def build(blocks: dict, industry_type: str | None = None) -> dict:
     if oil:
         kw = f", {oil[0]['power_kw']} kW" if oil[0].get("power_kw") else ""
         fl = "; ".join(x for x in (f"heating-oil tank (active oil boiler{kw})", fl) if x)
-    sp = [f"permit {(x.get('date') or '?')[:4]}: {x['description'][:90]}" for x in storage_permits[:2]]
+    strong = re.compile(r"citerne|réservoir|reservoir|hydrocarbure|mazout|solvant|produits chimiques|gaz liquéfié|propane", re.I)
+    sp_strong = [x for x in storage_permits if strong.search(x["description"])]
+    sp = [f"permit {(x.get('date') or '?')[:4]}: {x['description'][:90]}" for x in (sp_strong or storage_permits)[:2]]
     pol = [f"polluted site: {p.get('pollutants') or p.get('activity')}" for p in polluted[:1] if p.get("pollutants") or p.get("activity")]
     if sp or pol:
-        fl = "; ".join(x for x in (*sp, *pol, fl) if x)
-    verified_fl = bool(oil or sp or pol)
+        fl = "; ".join(dict.fromkeys(x for x in (*sp, *pol, fl) if x))
+    # "verified" only for a fuel/chemical evidence (oil boiler, tank permit); generic "storage area" stays inferred
+    verified_fl = bool(oil or sp_strong)
     if not fl and ind.get("flammables"):
         fl = f"typical for the declared industry: {ind['flammables']}"
     f.append(_rec("flammable_material_storage", fl, "verified" if verified_fl else ("inferred" if fl else "unknown"),
@@ -275,7 +282,9 @@ def build(blocks: dict, industry_type: str | None = None) -> dict:
 
     def cantonal(proc_key, label):
         if proc_key in proc:
-            return _rec(label, proc[proc_key], "verified", [cant])
+            v = dict(proc[proc_key])
+            v["level"] = LEVEL_EN.get(str(v.get("level", "")).lower(), v.get("level"))
+            return _rec(label, v, "verified", [cant])
         if cant_note and "outside every hazard zone" in cant_note:
             return _rec(label, {"level": "none", "share": 0}, "verified", [cant], "mapped area, building outside hazard zones")
         return _rec(label, None, "unknown", note=cant_note)

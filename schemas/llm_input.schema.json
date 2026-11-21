@@ -70,7 +70,14 @@
       "type": "object",
       "required": ["public_data", "aerial_image", "facade", "website"]
     },
-    "images": { "type": "object" },
+    "images": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["label", "credit", "shows", "mime", "data_url"],
+        "properties": { "data_url": { "type": "string", "pattern": "^data:image/jpeg;base64," } }
+      }
+    },
     "metrics": { "type": "object", "required": ["tool_calls", "tokens_input", "tokens_output", "cost_chf", "duration_ms"] }
   }
 }

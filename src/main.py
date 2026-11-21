@@ -12,7 +12,6 @@ POST /api/report.html  → the rendered HTML report with photos
 GET  /api/industries   → drop-down values for industry_type
 """
 
-import base64
 import sys
 from pathlib import Path
 from typing import Literal
@@ -68,10 +67,8 @@ def _run(req: ReportRequest, **kw) -> dict:
 
 @app.post("/api/llm-input")
 def create_llm_input(req: ReportRequest) -> dict:
-    """Everything up to the final LLM (vision on the images included). Images as base64 data URLs."""
-    res = _run(req, final_report=False)
-    images = {name: "data:image/jpeg;base64," + base64.b64encode(jpeg).decode() for name, jpeg in res["images"].items()}
-    return {"llm_input": res["llm_input"], "images": images}
+    """Everything up to the final LLM (vision included). Photos are embedded in llm_input.images[*].data_url."""
+    return _run(req, final_report=False)["llm_input"]
 
 
 @app.post("/api/report")
