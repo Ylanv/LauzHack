@@ -73,14 +73,17 @@ uv venv .venv && uv pip install --python .venv/bin/python -r requirements.txt uv
 ## Underwriter dashboard (`/dashboard.html`, `src/dashboard/`)
 Back-office page for underwriters, built from `docs/FRONTEND_INTEGRATION.md`. It is **not linked from the client app** and must never be shown to clients.
 - **Data:** one folder per case, written by `python -m src.report --input <request.json> --output reports/<case>` (repo root). In dev, a Vite plugin (`webapp/vite.config.ts`) lists and serves `reports/` (change it with `REPORTS_DIR`). Anywhere else, "Open a case folder" reads a folder from disk. `reports/` is git-ignored because it can hold client data.
-- **Case list:** case, company and address, client, industry (declared vs register), readiness, findings, questions (blocking), report state and date.
-- **Case page:** a synthetic banner, the pipeline states (running, invalid report, failed, partial sources) and tabs Overview · COPE · Hazards · Evidence · Valuation · Questions · Export.
-  - Narrative comes from `output.json`. Every value, status, source and image comes from `features_combined.json`, through the §4 ID resolution, with "unresolved" chips as the fallback.
-  - Fact chips are coloured by evidence status; clicking one shows its value, scope, confidence, method and sources.
-  - Images get an SVG overlay drawn from the annotations, a legend and the attribution.
-  - Export: print or PDF (every tab in order, banner kept) and downloads of `output.json` and `features_combined.json`. Tokens and cost appear only in "Internal run details".
-- Deep links: `/dashboard.html?case=<folder>&tab=Evidence`.
-- Test data: the generator writes a case with `--model mock` (no API key, no cost). Copying `examples/EXAMPLE_SYNTHETIC_*` into a folder (`features_combined.json`, `output.json`, `demo-assets/`) gives a synthetic case.
+- **Jira-like tickets** (`src/dashboard/tickets.ts`): every report is a ticket.
+  - Queues: All open · Assigned to me · Waiting for client · Resolved · All cases.
+  - Columns: Type (declared activity), Key, Summary (company + address), Requester, Assignee, Priority (highest finding), Status.
+  - Status lozenge with a menu: To review → In progress → Waiting for client → Resolved. Generating and Failed come from the pipeline and cannot be changed.
+  - Assignee: Unassigned / Me. Status, assignee and answered questions are kept in the browser (localStorage) for now; a shared store will be needed for a team.
+- **Ticket page:**
+  - Left: title (report headline), Status + Resolve + ••• (print, JSON downloads), Description, Next step.
+  - Tabs: Findings (one row per finding, opening to observation / implication / action / evidence), Questions (checklist, blocking first), Risk (COPE rows, hazards table, industrial fire facts), Evidence (images with annotation overlay, then sources, register and data quality folded), Valuation.
+  - Right: Details (assignee, readiness, priority, requester, company, address, activity, EGID, UID, date) and a folded "Run details" (tokens, cost: internal).
+  - Narrative comes from `output.json`. Values, statuses and sources come from `features_combined.json` (§4 ID resolution; "unresolved" chips as the fallback).- Deep links: `/dashboard.html?case=<folder>&tab=questions` (findings, questions, risk, evidence, valuation).
+- Test data: real reports only. The team commits them in `examples/reports/<case>/` (whole output folder of `python -m src.report`, with real API keys); the dashboard lists `examples/reports/` and the local `reports/`. No mock, synthetic or placeholder case.
 ## Waiting-screen map (`lib/mapFlight.ts`)
 - Single input: `MapFlight.update({ step, progress, coords })`. The camera follows the timeline and never runs on its own timer.
 - Style (`lib/worldStyle.ts`): a light map in the app colours.

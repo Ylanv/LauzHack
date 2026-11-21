@@ -97,6 +97,21 @@ REPORTS_DIR = Path(_os.environ.get("REPORTS_DIR") or ("/tmp/reports" if config.O
 _JOBS: dict[str, Path] = {}
 
 
+def _run_job(report_pipeline, doc: dict, out: Path) -> None:
+    """Runs the pipeline; any unexpected exception ends the job as failed instead of leaving it "running" forever."""
+    try:
+        report_pipeline.run(doc, out)
+    except Exception as e:  # noqa: BLE001
+        try:
+            m = _json.loads((out / "metrics.json").read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            m = {"stages": []}
+        done = [s.get("stage") for s in m.get("stages", [])]
+        stage = {"etl": "features", "features": "llm", "llm": "validate"}.get(done[-1] if done else None, "etl")
+        m.update(status="failed", error={"stage": stage, "message": f"{type(e).__name__}: {str(e)[:300]}"})
+        (out / "metrics.json").write_text(_json.dumps(m, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
 @app.post("/api/reports", status_code=202)
 def start_report(req: LlmInputRequest, x_access_code: str | None = Header(None)) -> dict:
     if config.ACCESS_CODE and x_access_code != config.ACCESS_CODE:
@@ -111,7 +126,7 @@ def start_report(req: LlmInputRequest, x_access_code: str | None = Header(None))
            "company_legal_name": req.company_legal_name, "building_address": req.address,
            "industry_type": req.industry_type, "website": req.website}
     _JOBS[job_id] = out
-    threading.Thread(target=report_pipeline.run, args=(doc, out), daemon=True).start()
+    threading.Thread(target=_run_job, args=(report_pipeline, doc, out), daemon=True).start()
     return {"job_id": job_id}
 
 
