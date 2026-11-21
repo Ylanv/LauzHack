@@ -76,15 +76,22 @@
       <h2 id="r-title"></h2>
       <div class="stats" id="r-stats"></div>
     </section>
+    <section class="card">
+      <h2>JSON de sortie (llm_input.json)</h2>
+      <p>
+        <button type="button" id="dl-full">Télécharger le JSON complet (photos incluses)</button>
+        <button type="button" id="dl-llm">Télécharger la version LLM (sans photos)</button>
+        <button type="button" id="copy-json">Copier le JSON affiché</button>
+      </p>
+      <p class="note">Affichage : base64 des photos raccourci pour la lisibilité — le fichier téléchargé « complet » contient les photos entières.</p>
+      <pre id="r-json-main" style="max-height:640px"></pre>
+    </section>
     <section class="card"><h2>Identification</h2><div class="kv" id="r-ident"></div></section>
     <section class="card"><h2>Photos</h2><div class="photos" id="r-photos"></div></section>
     <section class="card">
       <h2>19 features de risque</h2>
       <table><thead><tr><th>Feature</th><th>Valeur</th><th>Statut</th><th>Source · note</th></tr></thead><tbody id="r-features"></tbody></table>
       <p class="note">Dangers naturels : information de souscription et de prévention, pas de surcharge de prime individuelle. Street View = démo.</p>
-    </section>
-    <section class="card">
-      <details><summary>JSON envoyé au LLM (sans les photos)</summary><pre id="r-json"></pre></details>
     </section>
   </div>
 </main>
@@ -168,8 +175,20 @@ function render(d, secs) {
     return `<tr><td>${esc(k)}</td><td>${fmt(f.value)}</td><td><span class="badge ${f.status}">${esc(f.status)}</span></td>
             <td class="note">${esc(s)}${e.note ? " · " + esc(e.note) : ""}</td></tr>`;
   }).join("")).join("");
+  // JSON output: displayed with shortened base64, downloadable in full and in its LLM version (no photos)
+  const shown = structuredClone(d);
+  Object.values(shown.images).forEach(i => { i.data_url = i.data_url.slice(0, 48) + `…(${Math.round(i.data_url.length / 1024)} KB)`; });
+  $("r-json-main").textContent = JSON.stringify(shown, null, 2);
   const lite = structuredClone(d); Object.values(lite.images).forEach(i => delete i.data_url);
-  $("r-json").textContent = JSON.stringify(lite, null, 2);
+  const slug = (id.company_name || "company").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+  const download = (obj, name) => {
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([JSON.stringify(obj, null, 2)], {type: "application/json"}));
+    a.download = name; a.click(); URL.revokeObjectURL(a.href);
+  };
+  $("dl-full").onclick = () => download(d, `${slug}.llm_input.json`);
+  $("dl-llm").onclick = () => download(lite, `${slug}.llm_input.for_llm.json`);
+  $("copy-json").onclick = () => navigator.clipboard.writeText($("r-json-main").textContent);
   $("result").classList.remove("hidden");
 }
 </script>
