@@ -18,10 +18,10 @@ cp .env.example .env        # mettre LLM_API_KEY (OpenRouter) dans .env — jama
 python scripts/build_llm_input.py "Marie Dupont" "CMDS SA" "Rue du Champ-Blanchod 7, 1228 Plan-les-Ouates" --industry metalworking
 python -m src.validate probe_out/cmds-sa/llm_input.json            # → OK
 
-uvicorn src.main:app --reload    # POST /api/llm-input · GET /api/industries · GET /api/health
+uvicorn src.main:app --reload    # POST /api/llm-input[?for_llm=true] · GET /api/industries · GET /api/health
 ```
 
-`build_llm_input.py` écrit dans `probe_out/<entreprise>/` : `llm_input.json` + `orthophoto.jpg` (bâtiment entouré en rouge) + `facade_streetview.jpg` + `website_1..3.jpg`. Option `--no-vision` = 0 token.
+`build_llm_input.py` écrit dans `probe_out/<entreprise>/` : `llm_input.json` (photos incluses en base64), `llm_input.for_llm.json` (sans les photos) + les photos en `.jpg`. Option `--no-vision` = 0 token.
 
 ---
 
@@ -120,15 +120,29 @@ Schéma : `schemas/llm_input.schema.json` · validation : `python -m src.validat
 | `feature_coverage_before_llm` | remplissage P0 / P1 / P2 |
 | `sources` | liste centrale (`src_*`) |
 | `evidence` | données brutes : registres + SITG, sortie de Gemini sur l'orthophoto, extraction du site web |
-| `images` | images livrées à côté (orthophoto, photos du site) |
+| `images` | photos **incluses en base64** : `images[nom] = {label, credit, shows, mime, data_url}` (`orthophoto.jpg`, `facade_streetview.jpg`, `website_N.jpg`) |
 | `metrics` | appels LLM, tokens, coût, durée |
+
+### Pour l'étape LLM (rapport final)
+
+- **Exemples prêts à l'emploi** (vraie sortie, CMDS SA) : `examples/llm_input.example.json` (complet ; base64 des photos remplacé par un marqueur) et `examples/llm_input.for_llm.example.json` (ce que le LLM reçoit).
+- **Ne jamais envoyer les photos au LLM** (une photo en base64 = des centaines de milliers de tokens). Envoyer `for_llm_text(doc)` — même JSON sans les `data_url`, ≈ 4 300 tokens — ou appeler `POST /api/llm-input?for_llm=true`.
+- Le LLM voit le catalogue `images[nom] = {label, shows, credit}` et **cite les photos par leur nom** dans le rapport (ex. `"facade_streetview.jpg"`) ; le rendu insère `doc["images"][nom]["data_url"]` (`<img src="...">`).
+- Rappels pour le prompt : `unknown` = non trouvé (jamais deviné) ; dangers naturels = information de souscription/prévention, pas de surcharge de prime ; Street View = démo.
+
+```python
+from src.pipeline import run, for_llm_text
+doc = run("Marie Dupont", "CMDS SA", "Rue du Champ-Blanchod 7, 1228 Plan-les-Ouates", "metalworking")
+prompt_json = for_llm_text(doc)          # → LLM
+photos = doc["images"]                   # → rendu du rapport
+```
 
 ---
 
 ## Code
 
 ```
-src/pipeline.py          orchestration (run, contrôles de périmètre, llm_input)
+src/pipeline.py          run() → llm_input.json · for_llm_text() · save() · contrôles de périmètre
 src/public_data.py       Zefix, géocodage, RegBL, emprise (mensuration → SITG), dangers, orthophoto
 src/geneva.py            SITG : cadastre, toit 3D, énergie, chaudières, autorisations, sites pollués, établissements
 src/company_profile.py   statut registre + signaux de faillite (API zefix.ch)
@@ -137,22 +151,22 @@ src/reconstruction.py    valeur de reconstruction (volume × CHF/m³)
 src/industries.py        types d'industrie (formulaire) → procédés typiques
 src/web_scrape.py        site web : texte, phrases à risque, photos
 src/streetview.py        façade Google Street View (démo)
-src/blocks.py            blocs de preuves (vision Gemini sur l'orthophoto / le site)
+src/blocks.py            blocs de preuves + appels vision (orthophoto, façade, site web)
 src/features.py          les 19 features + sources
-src/prompts.py           prompts + sous-schémas JSON stricts des appels LLM
+src/prompts.py           prompts + sous-schémas JSON stricts des appels vision
 src/llm.py               seul point d'entrée LLM : json_schema, retry, cache, tokens, coût
 src/validate.py          validation de llm_input.json
 src/main.py              API FastAPI (Vercel)
-src/report_writer.py     étape suivante (rapport final LLM + HTML) — hors partie 1
 scripts/build_llm_input.py   un llm_input.json
 scripts/llm_input_matrix.py  un lot d'entreprises → tableau de couverture des features
 scripts/probe_sources.py     debug : toutes les sources publiques sur une adresse
-scripts/run_report.py        rapport final complet (avec LLM de synthèse)
+examples/                    llm_input exemple (complet + version LLM)
+schemas/llm_input.schema.json  contrat de sortie
 ```
 
 ## Hébergement
 
-- **Modèles** : OpenRouter (clé AXA). Vision + extraction : `google/gemini-2.5-flash-lite` ; rapport final : `anthropic/claude-haiku-5.5`.
+- **Modèles** : OpenRouter (clé AXA). Vision + extraction : `google/gemini-2.5-flash-lite` (≈ CHF 0.0005 par bâtiment).
 - **Vercel** : FastAPI = une fonction Python ; pas d'écriture disque hors `/tmp` ; cache LLM via Upstash Redis si configuré ; 13–60 s par bâtiment (< 300 s).
 
 ## Limites connues

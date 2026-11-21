@@ -49,8 +49,7 @@ def heating(regbl: dict) -> dict:
     }
 
 
-def condition(regbl: dict, declared: str | None = None, renovation_year: int | None = None,
-              pv_seen: str | None = None) -> dict:
+def condition(regbl: dict, renovation_year: int | None = None, pv_seen: str | None = None) -> dict:
     lo, hi, basis = _age(regbl)
     this_year = date.today().year
     age_min = this_year - hi if hi else None
@@ -68,9 +67,7 @@ def condition(regbl: dict, declared: str | None = None, renovation_year: int | N
     if renovation_year:
         signals.append(f"last renovation declared: {renovation_year}")
 
-    if declared:
-        state, status = declared, "client_declared"
-    elif age_max is not None and age_max <= 10:
+    if age_max is not None and age_max <= 10:
         state, status = "new", "estimated"
     elif signals and (age_min or 0) > 25:
         state, status = "renovated (signals)", "estimated"

@@ -1,32 +1,48 @@
-"""End-to-end pipeline: 3 inputs → 3 evidence blocks → 25 features → final LLM report → HTML with photos.
+"""Pipeline (part 1): 4 inputs → public data + SITG + vision → 19 features → llm_input.json.
 
-Inputs (the client provides only these): client_name, company_legal_name (exact, Zefix), building address.
-Optional technical hint: website (improves block 3; not part of the client form).
-Everything else is researched automatically or marked unknown.
+Inputs (client form): client_name, company_legal_name (exact, Zefix), Geneva building address, industry_type.
+Optional technical hint: website. Everything else is researched automatically or marked unknown.
+
+The output (llm_input.json) is the hand-off to the final-report LLM (separate step):
+- run(...)            → the full JSON, photos embedded as base64 (for the report)
+- for_llm_text(doc)   → the same JSON without the photos (what is sent to the LLM as text)
 """
 
 import base64
 import copy
 import re
 import time
-import uuid
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 
 from src import building_condition as bc
-from src import geneva
 from src import features as feat
-from src import reconstruction
+from src import geneva, reconstruction
 from src.blocks import block_aerial, block_facade, block_public, block_website
 from src.company_profile import company_profile
 from src.llm import build_metrics
 from src.public_data import probe, strip_binary
-from src.report_writer import render_html, write
 from src.web_scrape import scrape
 
 
+class InputError(Exception):
+    """Company or address not found / ambiguous / out of scope → shown to the user (HTTP 422), no JSON."""
+
+
+class ServiceError(Exception):
+    """An external public service failed (timeout, outage) → retry later (HTTP 503); not the client's fault."""
+
+
+# Geneva cadastre destination -> RegBL building class (usage label and m3 reconstruction prices).
+# Needed because RegBL classes are sometimes wrong in GE (a 3,500 m2 workshop registered as a single-family house).
+GE_DESTINATION_TO_GKLAS = {"Atelier": 1251, "Usine": 1251, "Hangar": 1251, "Autre bât. d'activités": 1274,
+                           "Dépôt": 1252, "Entrepôt": 1252, "Garage": 1242, "Bureaux": 1220, "Commerce": 1230}
+
+IMAGE_NAMES = {"aerial_image": "orthophoto.jpg", "facade": "facade_streetview.jpg"}  # website photos: website_N.jpg
+
+
 def _safe(future, photos_from=None):
-    """An LLM block that fails (timeout, invalid JSON twice…) degrades to status=error; the report still runs."""
+    """A vision block that fails (timeout, invalid JSON twice…) degrades to status=error; the pipeline continues."""
     try:
         return future.result()
     except Exception as e:  # noqa: BLE001
@@ -35,46 +51,8 @@ def _safe(future, photos_from=None):
         return {"status": "error", "note": f"{type(e).__name__}: {str(e)[:160]}", "data": None, "photos": photos}
 
 
-class ServiceError(Exception):
-    """An external public service failed (timeout, outage) → retry later; not the client's fault."""
-
-
-class InputError(Exception):
-    """Company or address not found / ambiguous / out of scope → shown to the user, no report."""
-
-
-# Scope: SMEs with their OWN activity building (workshop, factory, warehouse). Housing and mixed-use buildings
-# (shops on the ground floor of an apartment block) are out of scope: shared risks, several insureds, other product.
-RESIDENTIAL_GKAT = {1020: "residential building", 1030: "residential building with secondary use",
-                    1040: "partly residential building (mixed use)"}
-
-
-# Geneva cadastre destination -> RegBL building class (used for usage label and m3 reconstruction prices).
-# Needed because RegBL classes are sometimes wrong in GE (a 3,500 m2 workshop registered as a single-family house).
-GE_DESTINATION_TO_GKLAS = {"Atelier": 1251, "Usine": 1251, "Hangar": 1251, "Autre bât. d'activités": 1274,
-                           "Dépôt": 1252, "Entrepôt": 1252, "Garage": 1242, "Bureaux": 1220, "Commerce": 1230}
-
-
-def check_scope(regbl: dict, footprint: dict) -> None:
-    """Outside Geneva only (in GE the SITG cadastre is authoritative and checked later).
-    Reject only when BOTH the category and the class say housing, to tolerate RegBL inconsistencies."""
-    if regbl.get("gdekt") == "GE":
-        return
-    gkat, gklas = regbl.get("gkat"), regbl.get("gklas") or 0
-    if gkat in RESIDENTIAL_GKAT and 1100 <= gklas < 1200:
-        raise InputError(f"Out of scope: the building (EGID {regbl.get('egid')}) is a {RESIDENTIAL_GKAT[gkat]}. "
-                         "AXA Smart Property covers companies with their own activity building (workshop, factory, warehouse).")
-
-
-def run(client_name: str, company: str, address: str, industry_type: str | None = None, website: str | None = None,
-        use_llm: bool = True, final_report: bool = True) -> dict:
-    """use_llm=False: no LLM at all (0 token). final_report=False: vision (Gemini) runs on the orthophoto and website
-    photos, then the pipeline stops and returns the JSON for the final-report LLM."""
-    t0 = time.perf_counter()
-    m = re.search(r"\b(\d{4})\s+(.+)$", address.split(",")[-1].strip())
-    zip_code, town = (m.group(1), m.group(2)) if m else (None, None)
-
-    # 1) Public data first (identity checks + EGID + footprint), register profile in parallel.
+def _resolve(company: str, address: str) -> tuple[dict, dict]:
+    """Public data + register profile, with the hard input checks."""
     with ThreadPoolExecutor(2) as ex:
         f_probe = ex.submit(probe, company, address, None)
         f_prof = ex.submit(company_profile, company)
@@ -88,168 +66,164 @@ def run(client_name: str, company: str, address: str, industry_type: str | None 
             profile = f_prof.result()
         except Exception as e:  # noqa: BLE001 — unofficial API: degrade, never fail
             profile = {"status": "error", "error": str(e)[:200]}
-
-    regbl = pdata.get("regbl", {}).get("fields", {})
-    footprint = pdata.get("footprint", {})
-    canton = regbl.get("gdekt")
+    canton = pdata.get("regbl", {}).get("fields", {}).get("gdekt")
     if canton != "GE":
         raise InputError(f"Out of scope: AXA Smart Property currently covers buildings in the canton of Geneva only (found: {canton}).")
-    check_scope(regbl, footprint)
+    return pdata, profile
 
-    # 2) Geneva open data (SITG): establishment register gives the website → feeds the scraper.
-    ge = {}
-    if canton == "GE":
-        try:
-            ge["establishment"] = geneva.establishment((pdata.get("zefix") or {}).get("uid"))
-            ge.update(geneva.building(regbl.get("egid"), footprint.get("geometry")))
-        except Exception as e:  # noqa: BLE001
-            ge = {"status": "error", "error": str(e)[:200]}
-        cls = (ge.get("building") or {}).get("nomen_classe") or ""
-        if cls.startswith("Mixte") or cls.startswith("Logement"):
-            raise InputError(f"Out of scope: the Geneva cadastre classifies this building as '{cls}'. "
-                             "AXA Smart Property covers companies with their own activity building.")
-    site_hint = website or (ge.get("establishment") or {}).get("website")
+
+def _geneva(pdata: dict) -> dict:
+    """SITG data; rejects housing / mixed-use buildings (the Geneva cadastre is authoritative)."""
+    regbl, footprint = pdata.get("regbl", {}).get("fields", {}), pdata.get("footprint", {})
     try:
-        scraped = scrape(company, zip_code, town, site_hint)
+        ge = {"establishment": geneva.establishment((pdata.get("zefix") or {}).get("uid"))}
+        ge.update(geneva.building(regbl.get("egid"), footprint.get("geometry")))
+    except Exception as e:  # noqa: BLE001
+        return {"status": "error", "error": str(e)[:200]}
+    cls = (ge.get("building") or {}).get("nomen_classe") or ""
+    if cls.startswith(("Mixte", "Logement")):
+        raise InputError(f"Out of scope: the Geneva cadastre classifies this building as '{cls}'. "
+                         "AXA Smart Property covers companies with their own activity building.")
+    return ge
+
+
+def _building_inputs(regbl: dict, gb: dict, ge: dict, footprint_m2: float | None, observed_floors: int | None):
+    """RegBL completed with SITG, with plausibility checks. Returns (regbl_plus, observed_floors, volume_note)."""
+    rb = dict(regbl)
+    if gb.get("destination") in GE_DESTINATION_TO_GKLAS:
+        rb["gklas"] = GE_DESTINATION_TO_GKLAS[gb["destination"]]
+    rb["gastw"] = regbl.get("gastw") or gb.get("niveaux_horsol")
+    rb["gbauj"] = regbl.get("gbauj") or gb.get("annee_construction")
+    # The energy index / RegBL area sometimes covers a whole group of buildings → keep only if <= footprint x levels x 1.3
+    levels = rb["gastw"]
+    max_area = footprint_m2 * (levels or 3) * 1.3 if footprint_m2 else None
+    area = regbl.get("gebf") or (ge.get("energy") or {}).get("heated_area_m2")
+    rb["gebf"] = area if (area and (not max_area or area <= max_area)) else None
+    if area and not rb["gebf"] and ge.get("energy"):
+        ge["energy"]["heated_area_m2_rejected"] = area
+        ge["energy"]["heated_area_m2"] = None
+    volume_note = None
+    if not regbl.get("gvol") and gb.get("surface") and gb.get("hauteur"):
+        # Cadastre footprint x height = volume; the height can include chimneys (a 1-level workshop at 29 m) → check it.
+        h, lv = gb["hauteur"], gb.get("niveaux_horsol")
+        if (h <= lv * 7) if lv else (h <= 15):
+            rb["gvol"] = round(gb["surface"] * h)
+        else:
+            rb["gastw"] = rb.get("gastw") or lv or 1
+            observed_floors = None
+            volume_note = f"cadastre height {h} m rejected as implausible for {lv or 'unknown'} level(s)"
+    if not rb["gastw"] and gb.get("hauteur"):  # height → floors estimate (~4 m per level for workshops)
+        observed_floors = observed_floors or max(1, round(gb["hauteur"] / 4))
+    return rb, observed_floors, volume_note
+
+
+def run(client_name: str, company: str, address: str, industry_type: str | None = None, website: str | None = None,
+        use_llm: bool = True) -> dict:
+    """Returns llm_input.json as a dict. use_llm=False: no vision call (0 token)."""
+    t0 = time.perf_counter()
+    m = re.search(r"\b(\d{4})\s+(.+)$", address.split(",")[-1].strip())
+    zip_code, town = (m.group(1), m.group(2)) if m else (None, None)
+
+    pdata, profile = _resolve(company, address)
+    regbl, footprint = pdata.get("regbl", {}).get("fields", {}), pdata.get("footprint", {})
+    ge = _geneva(pdata)
+
+    # The cantonal company register gives the website → feeds the scraper.
+    try:
+        scraped = scrape(company, zip_code, town, website or (ge.get("establishment") or {}).get("website"))
     except Exception as e:  # noqa: BLE001
         scraped = {"status": "error", "note": str(e)[:200]}
 
-    # 3) Blocks 2 (vision) and 3 (website) in parallel.
+    # Vision blocks in parallel: orthophoto, street-level facade, website (text + photos).
     purpose = (pdata.get("zefix") or {}).get("purpose")
     with ThreadPoolExecutor(3) as ex:
-        f_b = ex.submit(block_aerial, pdata, use_llm)
-        f_c = ex.submit(block_website, scraped, company, address, purpose, use_llm)
+        f_a = ex.submit(block_aerial, pdata, use_llm)
         f_f = ex.submit(block_facade, pdata, company, address, use_llm)
-        aerial, web, facade = _safe(f_b, photos_from=pdata.get("swissimage")), _safe(f_c), _safe(f_f)
+        f_w = ex.submit(block_website, scraped, company, address, purpose, use_llm)
+        aerial, facade, web = _safe(f_a, photos_from=pdata.get("swissimage")), _safe(f_f), _safe(f_w)
 
-    # 4) Block 1 completed with SITG + what image / website observed.
     gb = ge.get("building") or {}
-    regbl_plus = dict(regbl)
-    if gb.get("destination") in GE_DESTINATION_TO_GKLAS:
-        regbl_plus["gklas"] = GE_DESTINATION_TO_GKLAS[gb["destination"]]
-    regbl_plus["gastw"] = regbl.get("gastw") or gb.get("niveaux_horsol")
-    # Floor area sanity: the energy index / RegBL area sometimes covers a whole group of buildings
-    # (11,315 m2 declared for a 705 m2-footprint, 2-level building) -> keep it only if <= footprint x levels x 1.3.
-    fp_m2, lv = footprint.get("area_m2"), regbl.get("gastw") or gb.get("niveaux_horsol")
-    max_area = fp_m2 * (lv or 3) * 1.3 if fp_m2 else None
-    area = regbl.get("gebf") or (ge.get("energy") or {}).get("heated_area_m2")
-    regbl_plus["gebf"] = area if (area and (not max_area or area <= max_area)) else None
-    if area and not regbl_plus["gebf"] and ge.get("energy"):
-        ge["energy"]["heated_area_m2_rejected"] = area
-        ge["energy"]["heated_area_m2"] = None
-    regbl_plus["gbauj"] = regbl.get("gbauj") or gb.get("annee_construction")
-    observed_floors = (web.get("data") or {}).get("floors_visible_on_photos")
-    if not regbl.get("gvol") and gb.get("surface") and gb.get("hauteur"):
-        # Geneva cadastre: measured footprint x height = building volume (closer to SIA 416 than floors x storey height).
-        # Plausibility: the cadastre height can include chimneys / technical parts (a 1-level workshop at 29 m).
-        h, lv = gb["hauteur"], gb.get("niveaux_horsol")
-        plausible = (h <= lv * 7) if lv else (h <= 15)
-        if plausible:
-            regbl_plus["gvol"] = round(gb["surface"] * h)
-        else:
-            regbl_plus["gastw"] = regbl_plus.get("gastw") or lv or 1  # fall back on levels x typical storey height
-            observed_floors = None
-            volume_note = f"cadastre height {h} m rejected as implausible for {lv or 'unknown'} level(s)"
-    if not regbl_plus["gastw"] and gb.get("hauteur"):  # SITG height → floors estimate (4 m per floor for workshops)
-        observed_floors = observed_floors or max(1, round(gb["hauteur"] / 4))
-    pv = (aerial.get("data") or {}).get("pv_panels")
-    rc = reconstruction.estimate(regbl_plus, footprint.get("area_m2"), observed_floors)
-    if "volume_note" in locals() and rc.get("method"):
+    rb, observed_floors, volume_note = _building_inputs(
+        regbl, gb, ge, footprint.get("area_m2"), (web.get("data") or {}).get("floors_visible_on_photos"))
+    rc = reconstruction.estimate(rb, footprint.get("area_m2"), observed_floors)
+    if volume_note and rc.get("method"):
         rc["method"] += f" ({volume_note})"
     public = block_public(pdata, profile, rc)
-    if ge:
-        public["data"]["geneva"] = ge
-    b = public["data"]["building"]
-    reno_year = gb.get("annee_transformation") or next((int(x["date"][:4]) for x in ge.get("renovation_permits", []) if x.get("date")), None)
-    b["condition"] = bc.condition(regbl_plus, None, reno_year, pv)
-    b["heating"] = bc.heating(regbl)
+    public["data"]["geneva"] = ge
+    reno_year = gb.get("annee_transformation") or next(
+        (int(x["date"][:4]) for x in ge.get("renovation_permits", []) if x.get("date")), None)
+    public["data"]["building"]["condition"] = bc.condition(rb, reno_year, (aerial.get("data") or {}).get("pv_panels"))
+    public["data"]["building"]["heating"] = bc.heating(regbl)
 
     blocks = {"public_data": public, "aerial_image": aerial, "facade": facade, "website": web}
     fs = feat.build(blocks, industry_type)
-    if not use_llm or not final_report:
-        calls = [x["llm_call"] for x in (aerial, web, facade) if x.get("llm_call")]
-        return llm_input(client_name, company, address, fs, blocks, int((time.perf_counter() - t0) * 1000), calls, industry_type)
-    report, synth_call = write(blocks, fs["features"])
-
-    calls = [x["llm_call"] for x in (aerial, web) if x.get("llm_call")] + ([synth_call] if synth_call else [])
-    cov = feat.coverage(fs["features"])
-    metrics = build_metrics(calls, int((time.perf_counter() - t0) * 1000), cov["all"]["total"], cov["all"]["filled"])
-    result = {
-        "schema_version": "2.0",
-        "report_id": str(uuid.uuid4()),
-        "generated_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
-        "request": {"client_name": client_name, "company_legal_name": company, "building_address": address,
-                    "industry_type": industry_type},
-        "identification": fs["identification"],
-        "features": fs["features"],
-        "feature_evidence": fs["feature_evidence"],
-        "feature_coverage": cov,
-        "sources": fs["sources"],
-        "report": report,
-        "metrics": metrics,
-    }
-    result["html"] = render_html(result, blocks)
-    result["blocks"] = strip_binary(blocks)
-    return result
+    calls = [x["llm_call"] for x in (aerial, facade, web) if x.get("llm_call")]
+    request = {"client_name": client_name, "company_legal_name": company, "building_address": address,
+               "industry_type": industry_type}
+    return _llm_input(request, fs, blocks, calls, int((time.perf_counter() - t0) * 1000))
 
 
-def llm_input(client_name, company, address, fs, blocks, duration_ms, calls=(), industry_type=None) -> dict:
-    """The hand-off JSON: everything collected without any LLM, ready to send to the LLM step.
-    Images are returned separately (bytes) so the JSON stays small; the JSON references them by name."""
+def _llm_input(request: dict, fs: dict, blocks: dict, calls: list, duration_ms: int) -> dict:
     images = {}
     for key in ("aerial_image", "facade", "website"):
         for i, ph in enumerate(blocks.get(key, {}).get("photos", [])):
-            name = {"aerial_image": "orthophoto.jpg", "facade": "facade_streetview.jpg"}.get(key, f"website_{i + 1}.jpg")
-            images[name] = {"jpeg": ph["jpeg"], "label": ph["label"], "credit": ph.get("credit")}
-    cov = feat.coverage(fs["features"])
-    aer = blocks.get("aerial_image", {}).get("data") or {}
-    fac = blocks.get("facade", {}).get("data") or {}
-    webd = blocks.get("website", {}).get("data") or {}
+            images[IMAGE_NAMES.get(key, f"website_{i + 1}.jpg")] = ph
+    aer = blocks["aerial_image"].get("data") or {}
+    fac = blocks["facade"].get("data") or {}
     shows = {"orthophoto.jpg": "; ".join(aer.get("observations") or []) or "aerial view of the building (outlined in red)",
              "facade_streetview.jpg": ("; ".join(fac.get("observations") or []) if fac.get("facade_visible")
                                        else "street view towards the building (facade not clearly visible)")}
-    for i, obs in enumerate(webd.get("photo_observations") or []):
+    for i, obs in enumerate((blocks["website"].get("data") or {}).get("photo_observations") or []):
         shows[f"website_{i + 1}.jpg"] = obs
-    payload = {
+    cov = feat.coverage(fs["features"])
+    doc = {
         "schema_version": "2.0-llm-input",
         "generated_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
-        "request": {"client_name": client_name, "company_legal_name": company, "building_address": address,
-                    "industry_type": industry_type},
+        "request": request,
         "identification": fs["identification"],
         "features": fs["features"],                  # 19 x {feature, value, status, requires_verification}
         "feature_evidence": fs["feature_evidence"],  # per feature: source_ids + note
         "feature_coverage_before_llm": cov,
         "sources": fs["sources"],
         "evidence": {
-            "public_data": blocks["public_data"]["data"],                       # registers + geodata (+ SITG in GE)
+            "public_data": blocks["public_data"]["data"],
             "aerial_image": {"image": "orthophoto.jpg" if "orthophoto.jpg" in images else None,
-                             "status": blocks["aerial_image"]["status"],
-                             "vision": blocks["aerial_image"].get("data"),          # Gemini output (VISION_SCHEMA)
+                             "status": blocks["aerial_image"]["status"], "vision": blocks["aerial_image"].get("data"),
                              "note": blocks["aerial_image"].get("note")},
             "facade": {"image": "facade_streetview.jpg" if "facade_streetview.jpg" in images else None,
                        "status": blocks["facade"]["status"], "camera": blocks["facade"].get("camera"),
                        "vision": blocks["facade"].get("data"), "note": blocks["facade"].get("note")},
             "website": {"status": blocks["website"]["status"], "meta": blocks["website"].get("meta"),
-                        "extraction": blocks["website"].get("data"),            # Gemini output on text + photos (WEB_SCHEMA)
-                        "raw": blocks["website"].get("raw"), "note": blocks["website"].get("note"),
-                        "images": [n for n in images if n.startswith("website_")]},
+                        "extraction": blocks["website"].get("data"), "raw": blocks["website"].get("raw"),
+                        "note": blocks["website"].get("note"), "images": [n for n in images if n.startswith("website_")]},
         },
-        # Photos embedded for the REPORT (base64 data URLs). Never sent to the LLM: use for_llm_text() before the
-        # final-report call; the LLM references photos by name and the renderer inserts the data_url.
-        "images": {n: {"label": v["label"], "credit": v["credit"], "shows": shows.get(n, v["label"]), "mime": "image/jpeg",
-                       "data_url": "data:image/jpeg;base64," + base64.b64encode(v["jpeg"]).decode()}
-                   for n, v in images.items()},
-        "metrics": build_metrics(list(calls), duration_ms, cov["all"]["total"], cov["all"]["filled"]),
+        # Photos for the REPORT (base64). Never sent to the LLM: see for_llm_text().
+        "images": {n: {"label": ph["label"], "credit": ph.get("credit"), "shows": shows.get(n, ph["label"]),
+                       "mime": "image/jpeg", "data_url": "data:image/jpeg;base64," + base64.b64encode(ph["jpeg"]).decode()}
+                   for n, ph in images.items()},
+        "metrics": build_metrics(calls, duration_ms, cov["all"]["total"], cov["all"]["filled"]),
     }
-    return {"llm_input": strip_binary(payload), "images": {n: v["jpeg"] for n, v in images.items()}}
+    return strip_binary(doc)
 
 
 def for_llm_text(llm_input: dict) -> dict:
     """The JSON to send to the final-report LLM: identical, minus the base64 photos.
-    Photos are NOT sent to the LLM (already analysed by the vision step). The LLM only sees the catalogue
-    images[name] = {label, shows, credit} and references photos BY NAME in the report (e.g. "facade_streetview.jpg");
-    the report renderer then inserts llm_input.images[name].data_url."""
+    Photos are NOT sent to the LLM (already analysed by the vision step). The LLM sees the catalogue
+    images[name] = {label, shows, credit} and references photos BY NAME (e.g. "facade_streetview.jpg");
+    the report renderer then inserts llm_input["images"][name]["data_url"]."""
     doc = copy.deepcopy(llm_input)
     for img in (doc.get("images") or {}).values():
         img.pop("data_url", None)
     return doc
+
+
+def save(llm_input: dict, out_dir, with_image_files: bool = True) -> None:
+    """Write llm_input.json (+ the photos as .jpg files for convenience)."""
+    import json
+    from pathlib import Path
+    out = Path(out_dir)
+    out.mkdir(parents=True, exist_ok=True)
+    (out / "llm_input.json").write_text(json.dumps(llm_input, ensure_ascii=False, indent=2), encoding="utf-8")
+    if with_image_files:
+        for name, img in llm_input.get("images", {}).items():
+            (out / name).write_bytes(base64.b64decode(img["data_url"].split(",", 1)[1]))

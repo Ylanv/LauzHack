@@ -27,9 +27,8 @@ LLM_BASE_URL = os.environ.get("LLM_BASE_URL", "https://openrouter.ai/api/v1")
 LLM_API_KEY = os.environ.get("LLM_API_KEY", "")
 
 MODELS = {
-    "vision": os.environ.get("MODEL_VISION", ""),          # orthophoto + photos du site
-    "extraction": os.environ.get("MODEL_EXTRACTION", ""),  # extraction industrielle (texte)
-    "synthesis": os.environ.get("MODEL_SYNTHESIS", ""),    # 1 appel final
+    "vision": os.environ.get("MODEL_VISION", ""),          # orthophoto, facade, website photos
+    "extraction": os.environ.get("MODEL_EXTRACTION", ""),  # website text when there is no photo
 }
 
 # Prix en CHF par million de tokens (input, output), hardcodés et approximatifs.
@@ -37,11 +36,9 @@ MODELS = {
 MODEL_PRICES_CHF_PER_MTOK: dict[str, tuple[float, float]] = {
     # OpenRouter list price in USD converted at a hardcoded ~0.80 CHF/USD (approximate, fine for the benchmark).
     "google/gemini-2.5-flash-lite": (0.08, 0.32),
-    "anthropic/claude-haiku-5.5": (0.08, 0.40),
 }
 
-# --- Street-level imagery (Mapillary, open CC-BY-SA, free token) ---
-MAPILLARY_TOKEN = os.environ.get("MAPILLARY_TOKEN", "")
+# --- Street-level facade photo (Google Street View Static API, demo) ---
 GOOGLE_MAPS_API_KEY = os.environ.get("GOOGLE_MAPS_API_KEY", "")
 
 # --- Cache ---

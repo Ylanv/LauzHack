@@ -15,7 +15,6 @@ Usage:
 import base64
 import json
 import time
-from typing import Any
 
 from jsonschema import Draft202012Validator
 from openai import OpenAI

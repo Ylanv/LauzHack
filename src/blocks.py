@@ -6,7 +6,6 @@ C. website      — simple scraping of the company site (text + photos) → 1 ca
 Each block = {"status", "data", "photos"?, "llm_call"?}. Blocks B/C are skipped (status "skipped") without an LLM key.
 """
 
-import json
 
 from src import config
 from src.prompts import FACADE_PROMPT, FACADE_SCHEMA, SYSTEM, VISION_PROMPT, VISION_SCHEMA, WEB_PROMPT, WEB_SCHEMA
@@ -47,7 +46,6 @@ def block_public(probe: dict, profile: dict, reconstruction: dict) -> dict:
             "cantonal_hazard_map": hc.get("processes") if hc.get("status") == "ok" else None,
             "cantonal_hazard_map_note": hc.get("note"),
         },
-        "neighbourhood": {"swissprtr_sites_1km": probe.get("swissprtr", {}).get("nearby", [])},
     }
     return {"status": "ok", "data": data}
 
@@ -104,15 +102,3 @@ def block_website(scraped: dict, company: str, address: str, purpose: str | None
     data, call = llm_call(role, SYSTEM, prompt, WEB_SCHEMA, "website", images=[p["jpeg"] for p in photos] if role == "vision" else None,
                           max_tokens=1400)
     return {"status": "ok", "data": data, "meta": meta, "photos": photos, "llm_call": call}
-
-
-def compact(blocks: dict) -> str:
-    """What the final LLM reads: block data only, no images/bytes, no nulls → fewer tokens."""
-    def prune(o):
-        if isinstance(o, dict):
-            return {k: prune(v) for k, v in o.items() if v not in (None, [], {}, "") and not isinstance(v, bytes)}
-        if isinstance(o, list):
-            return [prune(v) for v in o]
-        return o
-    return json.dumps({k: {"status": b["status"], "data": prune(b.get("data"))} for k, b in blocks.items()},
-                      ensure_ascii=False, separators=(",", ":"))

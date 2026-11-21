@@ -1,0 +1,755 @@
+{
+  "schema_version": "2.0-llm-input",
+  "generated_at": "2026-11-21T16:47:36.620990Z",
+  "request": {
+    "client_name": "Marie Dupont",
+    "company_legal_name": "CMDS SA",
+    "building_address": "Rue du Champ-Blanchod 7, 1228 Plan-les-Ouates",
+    "industry_type": "metalworking"
+  },
+  "identification": {
+    "company_name": "CMDS SA",
+    "company_uid": "CHE-112.416.514",
+    "company_register_status": "EXISTIEREND",
+    "bankruptcy_risk_signals": {
+      "level": "low",
+      "signals": [],
+      "method": "rule-based signals from the commercial register (not a probability, no actuarial score)"
+    },
+    "building_address": "Rue du Champ-Blanchod 7 1228 Plan-les-Ouates",
+    "building_egid": "9082357",
+    "canton": "GE",
+    "cantonal_insurance_regime": "private_market",
+    "estimated_market_value_chf": null,
+    "company_size_employees": "10-19 travailleurs",
+    "noga_code": "256201",
+    "industry_type_declared": "Metalworking / machining / locksmith",
+    "annual_revenue_chf": null,
+    "annual_revenue_note": "not public for private companies — ask the client",
+    "requested_coverages": null,
+    "insurance_premium_estimate_chf": null,
+    "insurance_premium_note": "only with a validated AXA tariff model"
+  },
+  "features": [
+    {
+      "feature": "reconstruction_value_chf",
+      "value": {
+        "best_estimate_chf": 2200000.0,
+        "low_chf": 1600000.0,
+        "high_chf": 2800000.0
+      },
+      "status": "estimated",
+      "requires_verification": true
+    },
+    {
+      "feature": "building_usage",
+      "value": "Atelier (Activité) — CMDS SA specializes in custom metal construction, including facades, metal structures, and locksmith work.",
+      "status": "verified",
+      "requires_verification": false
+    },
+    {
+      "feature": "construction_material",
+      "value": "metal cladding (The main part of the facade appears to be made of ribbed metal panels.)",
+      "status": "observed",
+      "requires_verification": true
+    },
+    {
+      "feature": "construction_year",
+      "value": 1999,
+      "status": "verified",
+      "requires_verification": false
+    },
+    {
+      "feature": "floor_area_m2",
+      "value": 533.0,
+      "status": "verified",
+      "requires_verification": false
+    },
+    {
+      "feature": "number_of_floors",
+      "value": 1,
+      "status": "verified",
+      "requires_verification": false
+    },
+    {
+      "feature": "roof_type_material",
+      "value": "flat (0 deg) / membrane",
+      "status": "verified",
+      "requires_verification": false
+    },
+    {
+      "feature": "building_renovations",
+      "value": "no renovation recorded in the cadastre or in building permits",
+      "status": "inferred",
+      "requires_verification": true
+    },
+    {
+      "feature": "business_sector",
+      "value": "Ateliers mécaniques (NOGA 256201)",
+      "status": "verified",
+      "requires_verification": false
+    },
+    {
+      "feature": "site_industrial_processes",
+      "value": [
+        "permit 2016: agrandissement d'un atelier et création d'une surface de stockage",
+        "metal fabrication",
+        "3D modeling",
+        "historical activity on the site (polluted-sites cadastre): Ateliers mécaniques"
+      ],
+      "status": "verified",
+      "requires_verification": false
+    },
+    {
+      "feature": "high_temperature_operations",
+      "value": "possible: typical for the declared industry (welding, cutting, machining)",
+      "status": "inferred",
+      "requires_verification": true
+    },
+    {
+      "feature": "gas_installations",
+      "value": "active gas boiler(s): 1, 49.0 kW, installed 2019",
+      "status": "verified",
+      "requires_verification": false
+    },
+    {
+      "feature": "flammable_material_storage",
+      "value": "permit 2016: agrandissement d'un atelier et création d'une surface de stockage; polluted site: Ateliers mécaniques; along the facade: There are pallets, metal frames, and a forklift visible outside the building.",
+      "status": "inferred",
+      "requires_verification": true
+    },
+    {
+      "feature": "earthquake_exposure",
+      "value": {
+        "sia261_zone": "Z1b",
+        "soil_class": "E"
+      },
+      "status": "verified",
+      "requires_verification": false
+    },
+    {
+      "feature": "flood_exposure",
+      "value": {
+        "level": "none",
+        "share": 0
+      },
+      "status": "verified",
+      "requires_verification": false
+    },
+    {
+      "feature": "surface_runoff_exposure",
+      "value": {
+        "perimeter_share": 0.238,
+        "max_depth": "10-25 cm",
+        "by_depth": {
+          "0-10 cm": 0.188,
+          "10-25 cm": 0.05
+        }
+      },
+      "status": "verified",
+      "requires_verification": false
+    },
+    {
+      "feature": "hail_exposure",
+      "value": {
+        "hail_50y_cm": 3.0
+      },
+      "status": "verified",
+      "requires_verification": false
+    },
+    {
+      "feature": "landslide_exposure",
+      "value": {
+        "level": "none",
+        "share": 0
+      },
+      "status": "verified",
+      "requires_verification": false
+    },
+    {
+      "feature": "potential_repair_needs",
+      "value": [
+        "discoloration on roof section",
+        "facade condition looks fair (street-level photo)"
+      ],
+      "status": "observed",
+      "requires_verification": true
+    }
+  ],
+  "feature_evidence": {
+    "reconstruction_value_chf": {
+      "source_ids": [
+        "src_9",
+        "src_2",
+        "src_3"
+      ],
+      "note": "building volume (RegBL gvol or Geneva cadastre footprint x height) = 4,004 m³ × CHF 400–700/m³ (industrial building)"
+    },
+    "building_usage": {
+      "source_ids": [
+        "src_10",
+        "src_8"
+      ],
+      "note": null
+    },
+    "construction_material": {
+      "source_ids": [
+        "src_7"
+      ],
+      "note": "seen on the street-level facade photo"
+    },
+    "construction_year": {
+      "source_ids": [
+        "src_2"
+      ],
+      "note": "construction year (RegBL)"
+    },
+    "floor_area_m2": {
+      "source_ids": [
+        "src_10"
+      ],
+      "note": "heated floor area (SRE) from the Geneva energy index"
+    },
+    "number_of_floors": {
+      "source_ids": [
+        "src_2"
+      ],
+      "note": null
+    },
+    "roof_type_material": {
+      "source_ids": [
+        "src_10",
+        "src_6"
+      ],
+      "note": "type from 3D cadastre slope; material seen on the orthophoto"
+    },
+    "building_renovations": {
+      "source_ids": [
+        "src_10",
+        "src_2",
+        "src_6"
+      ],
+      "note": "estimated condition: intermediate"
+    },
+    "business_sector": {
+      "source_ids": [
+        "src_10",
+        "src_11"
+      ],
+      "note": "size: 10-19 travailleurs; declared: Metalworking / machining / locksmith"
+    },
+    "site_industrial_processes": {
+      "source_ids": [
+        "src_10",
+        "src_8"
+      ],
+      "note": null
+    },
+    "high_temperature_operations": {
+      "source_ids": [
+        "src_11"
+      ],
+      "note": null
+    },
+    "gas_installations": {
+      "source_ids": [
+        "src_10"
+      ],
+      "note": "heating: gas (boiler)"
+    },
+    "flammable_material_storage": {
+      "source_ids": [
+        "src_8",
+        "src_6",
+        "src_11",
+        "src_2"
+      ],
+      "note": null
+    },
+    "earthquake_exposure": {
+      "source_ids": [
+        "src_4"
+      ],
+      "note": null
+    },
+    "flood_exposure": {
+      "source_ids": [
+        "src_5"
+      ],
+      "note": "mapped area, building outside hazard zones · not usable as an individual premium surcharge (regulated natural-hazards cover)"
+    },
+    "surface_runoff_exposure": {
+      "source_ids": [
+        "src_4"
+      ],
+      "note": "share of the perimeter in a runoff zone; depth read from the official map colours (image processing, no LLM) · not usable as an individual premium surcharge (regulated natural-hazards cover)"
+    },
+    "hail_exposure": {
+      "source_ids": [
+        "src_4"
+      ],
+      "note": "not usable as an individual premium surcharge (regulated natural-hazards cover)"
+    },
+    "landslide_exposure": {
+      "source_ids": [
+        "src_5"
+      ],
+      "note": "mapped area, building outside hazard zones · not usable as an individual premium surcharge (regulated natural-hazards cover)"
+    },
+    "potential_repair_needs": {
+      "source_ids": [
+        "src_6",
+        "src_7"
+      ],
+      "note": "to inspect, not confirmed damage"
+    }
+  },
+  "feature_coverage_before_llm": {
+    "P0": {
+      "filled": 10,
+      "total": 10
+    },
+    "P1": {
+      "filled": 8,
+      "total": 8
+    },
+    "P2": {
+      "filled": 1,
+      "total": 1
+    },
+    "all": {
+      "filled": 19,
+      "total": 19
+    }
+  },
+  "sources": [
+    {
+      "id": "src_1",
+      "provider": "Zefix commercial register (Linked Data + zefix.ch)",
+      "kind": "official_registry",
+      "url": "https://www.zefix.ch",
+      "reliability": "verified"
+    },
+    {
+      "id": "src_2",
+      "provider": "Federal Register of Buildings (RegBL)",
+      "kind": "official_registry",
+      "url": "https://www.housing-stat.ch",
+      "reliability": "verified"
+    },
+    {
+      "id": "src_3",
+      "provider": "Official cadastral survey (geodienste.ch)",
+      "kind": "official_geodata",
+      "url": "https://geodienste.ch/services/av",
+      "reliability": "verified"
+    },
+    {
+      "id": "src_4",
+      "provider": "geo.admin.ch (FOEN / MeteoSwiss / SIA 261)",
+      "kind": "official_geodata",
+      "url": "https://wms.geo.admin.ch",
+      "reliability": "verified"
+    },
+    {
+      "id": "src_5",
+      "provider": "Cantonal hazard maps (geodienste.ch)",
+      "kind": "official_geodata",
+      "url": "https://geodienste.ch/services/gefahrenkarten",
+      "reliability": "verified"
+    },
+    {
+      "id": "src_6",
+      "provider": "SWISSIMAGE © swisstopo + vision model",
+      "kind": "aerial_image",
+      "url": null,
+      "reliability": "observed"
+    },
+    {
+      "id": "src_7",
+      "provider": "Google Street View (demo) + vision model",
+      "kind": "street_image",
+      "url": null,
+      "reliability": "observed"
+    },
+    {
+      "id": "src_8",
+      "provider": "Company website",
+      "kind": "company_website",
+      "url": "https://cmdssa.ch/",
+      "reliability": "inferred"
+    },
+    {
+      "id": "src_9",
+      "provider": "Indicative cost model (volume × CHF/m³)",
+      "kind": "derived_calculation",
+      "url": null,
+      "reliability": "estimated"
+    },
+    {
+      "id": "src_10",
+      "provider": "SITG Geneva (cadastre, energy, boilers, building permits, establishments)",
+      "kind": "official_registry",
+      "url": "https://sitg.ge.ch",
+      "reliability": "verified"
+    },
+    {
+      "id": "src_11",
+      "provider": "Declared by the client (industry type)",
+      "kind": "client_input",
+      "url": null,
+      "reliability": "declared"
+    }
+  ],
+  "evidence": {
+    "public_data": {
+      "company": {
+        "registered_names": "CMDS SA",
+        "uid": "CHE-112.416.514",
+        "legal_form_code": "0106",
+        "seat": "rue du Champ-Blanchod 7 1228 Plan-les-Ouates",
+        "purpose": "Tous travaux et activités dans le domaine de la construction métallique.",
+        "in_liquidation": false,
+        "register_status": "EXISTIEREND",
+        "registered_since": null,
+        "share_capital_chf": null,
+        "statutory_auditor": true,
+        "bankruptcy_risk": {
+          "level": "low",
+          "signals": [],
+          "method": "rule-based signals from the commercial register (not a probability, no actuarial score)"
+        },
+        "annual_revenue_chf": null,
+        "annual_revenue_note": "not public: Swiss private companies do not publish their accounts",
+        "company_value_chf": null,
+        "company_value_note": "not public: requires financial statements (ask the client / credit bureau)"
+      },
+      "building": {
+        "address": "Rue du Champ-Blanchod 7 1228 Plan-les-Ouates",
+        "egid": "9082357",
+        "canton": "GE",
+        "commune": "Plan-les-Ouates",
+        "category_code": 1060,
+        "class_code": 1251,
+        "construction_year": 1999,
+        "floors": 1,
+        "footprint_m2": 455.8,
+        "floor_area_m2": null,
+        "footprint_source": "av_wfs",
+        "volume_m3": null,
+        "altitude_m": 403.8,
+        "cantonal_insurance_regime": "private_market",
+        "reconstruction_cost": {
+          "best_estimate_chf": 2200000.0,
+          "low_chf": 1600000.0,
+          "high_chf": 2800000.0,
+          "status": "derived_calculation",
+          "method": "building volume (RegBL gvol or Geneva cadastre footprint x height) = 4,004 m³ × CHF 400–700/m³ (industrial building)",
+          "explanation": "Estimated cost to rebuild the building after a loss = what the insurer pays at replacement value (valeur à neuf) and the basis of the sum insured (too low a sum = underinsurance, pro-rata indemnity). Excl. land, machinery and stock; if not rebuilt, indemnity is usually limited to the current value. Unit prices to calibrate on AXA's m³ grid, indexed on the Geneva construction price index (2025: 161.8, base 1988)."
+        },
+        "condition": {
+          "state": "intermediate",
+          "status": "estimated",
+          "construction": {
+            "from": 1999,
+            "to": 1999,
+            "basis": "construction year (RegBL)"
+          },
+          "age_years": {
+            "min": 27,
+            "max": 27
+          },
+          "renovation_signals": [],
+          "last_renovation_year": null
+        },
+        "heating": {
+          "energy_source": "gas",
+          "generator": "boiler",
+          "info_updated": "31.12.2024",
+          "fire_relevant": true,
+          "presence_status": "confirmed_present"
+        }
+      },
+      "natural_hazards": {
+        "seismic_zone_sia261": "Z1b",
+        "seismic_soil_class": "E",
+        "hail_50y_cm": 3.0,
+        "surface_runoff_perimeter_share": 0.238,
+        "surface_runoff_max_depth": "10-25 cm",
+        "surface_runoff_share_by_depth": {
+          "0-10 cm": 0.188,
+          "10-25 cm": 0.05
+        },
+        "cantonal_hazard_map": {},
+        "cantonal_hazard_map_note": "mapped area, footprint outside every hazard zone (no known hazard)"
+      },
+      "geneva": {
+        "establishment": {
+          "status": "ok",
+          "noga_code": "256201",
+          "branch": "Ateliers mécaniques",
+          "activity_detail": null,
+          "size_class": "10-19 travailleurs",
+          "website": "http://www.cmdssa.ch",
+          "address": "Rue du Champ-Blanchod 7",
+          "sector_hazard": {
+            "process": "metal machining: welding, oils",
+            "high_temperature": true
+          }
+        },
+        "status": "ok",
+        "building": {
+          "destination": "Atelier",
+          "nomen_classe": "Activité",
+          "epoque_construction": "Période de 1996 à 2000",
+          "annee_construction": null,
+          "niveaux_horsol": 3,
+          "niveaux_ssol": 0,
+          "hauteur": 8.78,
+          "surface": 456,
+          "annee_transformation": null,
+          "mixed_use": false
+        },
+        "roof": {
+          "slope_mean_deg": 0,
+          "type": "flat"
+        },
+        "energy": {
+          "heated_area_m2": 533.0,
+          "idc_mj_m2": 297.0,
+          "idc_year": 2017,
+          "idc_status": "Manquant ou incomplet"
+        },
+        "boilers": [
+          {
+            "fuel": "Gaz",
+            "active": true,
+            "year": 2019,
+            "power_kw": 49.0,
+            "use": "Chauffage-eau chaude"
+          }
+        ],
+        "permits": [
+          {
+            "type": "DD",
+            "date": "2016-07-15",
+            "status": "TERMINE",
+            "description": "agrandissement d'un atelier et création d'une surface de stockage"
+          }
+        ],
+        "renovation_permits": [],
+        "activity_permits": [
+          {
+            "type": "DD",
+            "date": "2016-07-15",
+            "status": "TERMINE",
+            "description": "agrandissement d'un atelier et création d'une surface de stockage"
+          }
+        ],
+        "gas_permits": [],
+        "storage_permits": [
+          {
+            "type": "DD",
+            "date": "2016-07-15",
+            "status": "TERMINE",
+            "description": "agrandissement d'un atelier et création d'une surface de stockage"
+          }
+        ],
+        "polluted_sites": [
+          {
+            "activity": "Ateliers mécaniques",
+            "site_type": "Aire d'exploitation",
+            "pollutants": null,
+            "company": "Centurion SA"
+          }
+        ]
+      }
+    },
+    "aerial_image": {
+      "image": "orthophoto.jpg",
+      "status": "ok",
+      "vision": {
+        "image_quality": "good",
+        "roof_type": "flat",
+        "roof_material": "membrane",
+        "construction_material_hint": "concrete",
+        "pv_panels": "confirmed_absent",
+        "skylights": "confirmed_present",
+        "roof_equipment": [
+          "ventilation units",
+          "skylights"
+        ],
+        "outdoor_storage": "confirmed_absent",
+        "outdoor_storage_detail": null,
+        "vegetation_close_to_walls": "confirmed_absent",
+        "neighbouring_buildings_close": "confirmed_present",
+        "possible_roof_issues": [
+          "discoloration on roof section"
+        ],
+        "observations": [
+          "Flat roof with membrane material.",
+          "Skylights are visible on the roof.",
+          "Ventilation units are present on the roof.",
+          "A section of the roof shows discoloration.",
+          "Adjacent buildings are very close to this structure."
+        ]
+      },
+      "note": null
+    },
+    "facade": {
+      "image": "facade_streetview.jpg",
+      "status": "ok",
+      "camera": {
+        "date": "2024-06",
+        "distance_m": 21,
+        "heading_deg": 57
+      },
+      "vision": {
+        "facade_visible": true,
+        "construction_material": "metal_cladding",
+        "construction_material_detail": "The main part of the facade appears to be made of ribbed metal panels.",
+        "floors_visible": 3,
+        "visible_condition": "fair",
+        "outdoor_storage": "confirmed_present",
+        "outdoor_storage_detail": "There are pallets, metal frames, and a forklift visible outside the building.",
+        "signage_matches_company": "yes",
+        "observations": [
+          "The building has a mixed facade with metal cladding and a glass section.",
+          "Some windows appear to be tinted.",
+          "The outdoor storage includes various metal components and equipment."
+        ]
+      },
+      "note": null
+    },
+    "website": {
+      "status": "ok",
+      "meta": {
+        "site": "https://cmdssa.ch/",
+        "pages": [
+          "https://cmdssa.ch/"
+        ],
+        "js_rendered_suspect": false
+      },
+      "extraction": {
+        "activity_summary": "CMDS SA specializes in custom metal construction, including facades, metal structures, and locksmith work.",
+        "construction_material": "unknown",
+        "processes": [
+          "metal fabrication",
+          "3D modeling"
+        ],
+        "gas_installations": "unknown",
+        "high_temperature_processes": "unknown",
+        "flammable_materials": "unknown",
+        "flammable_materials_detail": null,
+        "protections_mentioned": [],
+        "floors_visible_on_photos": null,
+        "photo_observations": [
+          "Exterior of a modern building with a facade featuring vertical elements.",
+          "Interior staircase with metal railings and marble steps."
+        ],
+        "evidence": [
+          {
+            "claim": "Entreprise de construction métallique au service des professionnels",
+            "quote_or_photo": "Entreprise de construction métallique au service des professionnels",
+            "building_specific": false
+          },
+          {
+            "claim": "Nous accompagnons les architectes et ingénieurs dans la conception, la fabrication et la pose de façades, structures métalliques et serrureries sur mesure.",
+            "quote_or_photo": "Nous accompagnons les architectes et ingénieurs dans la conception, la fabrication et la pose de façades, structures métalliques et serrureries sur mesure.",
+            "building_specific": false
+          },
+          {
+            "claim": "Notre atelier est équipé de machines modernes et performantes",
+            "quote_or_photo": "Notre atelier est équipé de machines modernes et performantes",
+            "building_specific": false
+          },
+          {
+            "claim": "nous réalisons des pièces métalliques sur mesure",
+            "quote_or_photo": "nous réalisons des pièces métalliques sur mesure",
+            "building_specific": false
+          },
+          {
+            "claim": "Exterior of a modern building",
+            "quote_or_photo": "Photo 2: Exterior of a modern building",
+            "building_specific": false
+          },
+          {
+            "claim": "Interior staircase with metal railings",
+            "quote_or_photo": "Photo 3: Interior staircase with metal railings",
+            "building_specific": false
+          }
+        ]
+      },
+      "raw": null,
+      "note": null,
+      "images": [
+        "website_1.jpg",
+        "website_2.jpg",
+        "website_3.jpg"
+      ]
+    }
+  },
+  "images": {
+    "orthophoto.jpg": {
+      "label": "Orthophoto SWISSIMAGE (building outlined in red)",
+      "credit": "© swisstopo (SWISSIMAGE)",
+      "shows": "Flat roof with membrane material.; Skylights are visible on the roof.; Ventilation units are present on the roof.; A section of the roof shows discoloration.; Adjacent buildings are very close to this structure.",
+      "mime": "image/jpeg"
+    },
+    "facade_streetview.jpg": {
+      "label": "Street-level facade photo (Google Street View, demo)",
+      "credit": "© Google Street View (demo)",
+      "shows": "The building has a mixed facade with metal cladding and a glass section.; Some windows appear to be tinted.; The outdoor storage includes various metal components and equipment.",
+      "mime": "image/jpeg"
+    },
+    "website_1.jpg": {
+      "label": "Photo from the company website",
+      "credit": "https://cmdssa.ch/wp-content/uploads/2026/05/CMDS-SA.png",
+      "shows": "Exterior of a modern building with a facade featuring vertical elements.",
+      "mime": "image/jpeg"
+    },
+    "website_2.jpg": {
+      "label": "Photo from the company website",
+      "credit": "https://cmdssa.ch/wp-content/uploads/2026/05/PHOTO-2026-05-22-15-31-54-18.jpg",
+      "shows": "Interior staircase with metal railings and marble steps.",
+      "mime": "image/jpeg"
+    },
+    "website_3.jpg": {
+      "label": "Photo from the company website",
+      "credit": "https://cmdssa.ch/wp-content/uploads/2026/05/PHOTO-2026-05-22-16-21-05-2.jpg",
+      "shows": "Photo from the company website",
+      "mime": "image/jpeg"
+    }
+  },
+  "metrics": {
+    "fields_applicable": 19,
+    "fields_filled": 19,
+    "tool_calls": [
+      {
+        "tool": "aerial_image",
+        "duration_ms": 4,
+        "tokens_input": 0,
+        "tokens_output": 0,
+        "cache_hit": true
+      },
+      {
+        "tool": "facade",
+        "duration_ms": 0,
+        "tokens_input": 0,
+        "tokens_output": 0,
+        "cache_hit": true
+      },
+      {
+        "tool": "website",
+        "duration_ms": 0,
+        "tokens_input": 0,
+        "tokens_output": 0,
+        "cache_hit": true
+      }
+    ],
+    "tokens_input": 0,
+    "tokens_output": 0,
+    "cost_chf": 0.0,
+    "duration_ms": 14554
+  }
+}

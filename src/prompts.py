@@ -1,4 +1,4 @@
-"""System prompt + strict sub-schemas for the 3 LLM calls (vision, website, final report)."""
+"""System prompt + strict sub-schemas for the vision calls (orthophoto, facade, website)."""
 
 SYSTEM = """You are AXA Smart Property, a Swiss commercial-building risk pre-underwriting assistant.
 Return exactly one JSON object conforming to the provided JSON Schema. JSON only, no Markdown.
@@ -93,41 +93,3 @@ RISK SENTENCES:
 
 TEXT EXCERPT:
 {text}"""
-
-# ---------------------------------------------------------------- final report
-FINDING = _obj({
-    "topic": {"type": "string"},
-    "fact": {"type": "string"},
-    "effect": {"type": "string"},
-    "direction": {"type": "string", "enum": ["increases_risk", "decreases_risk", "neutral", "unknown"]},
-    "confidence": {"type": "string", "enum": ["verified", "observed", "inferred"]},
-})
-REPORT_SCHEMA = _obj({
-    "executive_summary": {"type": "string"},
-    "attention_level": {"type": "string", "enum": ["low", "moderate", "high", "very_high"]},
-    "blocks": {"type": "array", "items": _obj({
-        "block": {"type": "string", "enum": ["public_data", "aerial_image", "website"]},
-        "summary": {"type": "string"},
-        "findings": {"type": "array", "items": FINDING},
-    })},
-    "key_risks": STR_LIST,
-    "missing_information": STR_LIST,
-    "recommendations": STR_LIST,
-})
-REPORT_PROMPT = """Write the pre-underwriting report for an AXA property underwriter (Geneva, B2B) from the evidence below.
-The FEATURES list is the target schema (25 risk features, each with value, status and pricing relevance 1-5); unknown
-features must appear in missing_information when relevance >= 4.
-LEGAL: natural-hazard exposure (flood, runoff, hail, landslide) must NOT be presented as a premium surcharge for the
-regulated natural-hazards cover — present it as underwriting / prevention / special-cover information.
-Go through the blocks ONE BY ONE in this order: public_data (official registers and geodata, verified),
-aerial_image (vision on the orthophoto, observed), website (company website text and photos, inferred unless building-specific).
-For each relevant fact: state the fact, then EXPLAIN ITS EFFECT on the property risk (fire, natural hazards, maintenance,
-financial solidity of the client, reconstruction value) and give the direction. Skip blocks that were not run.
-Then: key risks, missing information the underwriter must ask the client, and concrete recommendations.
-Keep it compact: max 6 findings per block, max 5 items per list, one sentence per field.
-
-FEATURES (JSON):
-{features}
-
-EVIDENCE BLOCKS (JSON):
-{blocks}"""

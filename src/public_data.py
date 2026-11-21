@@ -20,11 +20,8 @@ import argparse
 import io
 import json
 import re
-import sqlite3
 import sys
-import tempfile
 import time
-import zipfile
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
@@ -274,13 +271,6 @@ def _gfi_json(layer, e, n, half=5):
     return client.get(WMS, params=p).json().get("features", [])
 
 
-def _ring_points(g, dist=2.5):
-    """Points on a line ~2.5 m outside the walls (works for Polygon and MultiPolygon)."""
-    line = g.buffer(dist).boundary
-    k = max(12, min(40, int(line.length / 8)))
-    return [line.interpolate(i / k, normalized=True).coords[0] for i in range(k)]
-
-
 def _grid_points(g, target=25):
     x0, y0, x1, y1 = g.bounds
     step_m = max(3.0, ((x1 - x0) * (y1 - y0) / target) ** 0.5)
@@ -312,7 +302,7 @@ def runoff_depth_from_map(geom, px_per_m=2):
         p = im.getpixel((min(w - 1, int((x - x0) / (x1 - x0) * w)), min(h - 1, int((y1 - y) / (y1 - y0) * h))))
         if p[3] < 128:
             continue
-        cls, dist = min(((c, sum((a - b) ** 2 for a, b in zip(p[:3], rgb))) for c, rgb in RUNOFF_CLASSES.items()), key=lambda t: t[1])
+        cls, dist = min(((c, sum((a - b) ** 2 for a, b in zip(p[:3], rgb, strict=True))) for c, rgb in RUNOFF_CLASSES.items()), key=lambda t: t[1])
         if dist < 3000:  # close enough to a legend colour (rejects water blue / antialiasing)
             counts[cls] += 1
     exposed = {c: round(v / k, 3) for c, v in counts.items() if v}
@@ -389,7 +379,7 @@ def hazards_cantonal(geom, canton):
         source, pts = "wms_sampled", _grid_points(g)
         for k, layer in PROCESS_LAYERS.items():
             with ThreadPoolExecutor(8) as ex:
-                levels = [lv for lv in ex.map(lambda p: _wms_level(layer, *p), pts) if lv]
+                levels = [lv for lv in ex.map(lambda p, lyr=layer: _wms_level(lyr, *p), pts) if lv]
             if levels:
                 worst = max(levels, key=_lvl)
                 out[k] = {"level": worst, "share": round(levels.count(worst) / len(pts), 3)}
@@ -416,24 +406,6 @@ def hazards_cantonal(geom, canton):
         return {"status": "ok", "source": source, "processes": {},
                 "note": "mapped area, footprint outside every hazard zone (no known hazard)"}
     return {"status": "empty", "source": source, "note": "no hazard-map data around this location"}
-
-
-_prtr = None
-
-
-@step
-def swissprtr(e, n, radius=1000):
-    global _prtr
-    if _prtr is None:
-        items = client.get(f"{STAC}/ch.bafu.swissprtr/items").json()["features"]
-        href = next(a["href"] for f in items for k, a in f["assets"].items() if k.endswith("gpkg.zip"))
-        z = zipfile.ZipFile(io.BytesIO(client.get(href).content))
-        p = Path(tempfile.mkdtemp()) / "prtr.gpkg"
-        p.write_bytes(z.read(next(x for x in z.namelist() if x.endswith(".gpkg"))))
-        _prtr = sqlite3.connect(p).execute("SELECT Betrieb, Ort, Ostkoordin, Nordkoordi FROM swissprtr").fetchall()
-    near = sorted({(b, o, round(((x - e) ** 2 + (y - n) ** 2) ** 0.5)) for b, o, x, y in _prtr
-                   if x and y and ((x - e) ** 2 + (y - n) ** 2) ** 0.5 <= radius}, key=lambda t: t[2])
-    return {"status": "ok", "within_m": radius, "nearby": [{"site": b, "place": o, "distance_m": d} for b, o, d in near[:5]]}
 
 
 # ================================================================ image
@@ -511,7 +483,7 @@ def probe(company, address, out_root="probe_out"):
 
     with ThreadPoolExecutor(5) as ex:  # enrichment branches in parallel
         jobs = {"height": ex.submit(height, e, n), "hazards_national": ex.submit(hazards_national, e, n, geom),
-                "hazards_cantonal": ex.submit(hazards_cantonal, geom, canton), "swissprtr": ex.submit(swissprtr, e, n),
+                "hazards_cantonal": ex.submit(hazards_cantonal, geom, canton),
                 "swissimage": ex.submit(swissimage, geom, e, n, out_dir)}
         for k, fut in jobs.items():
             res[k] = fut.result()
@@ -521,7 +493,7 @@ def probe(company, address, out_root="probe_out"):
     return res, out_dir
 
 
-STEPS = ["zefix", "geocode", "regbl", "footprint", "height", "hazards_national", "hazards_cantonal", "swissprtr", "swissimage"]
+STEPS = ["zefix", "geocode", "regbl", "footprint", "height", "hazards_national", "hazards_cantonal", "swissimage"]
 
 
 def summary(res):
