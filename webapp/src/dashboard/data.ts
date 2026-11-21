@@ -109,3 +109,16 @@ export const fmtShare = (k: string, x: any) => (typeof x === "number" && x >= 0 
 
 export const isSynthetic = (c: CaseData) =>
   !!c.metrics?.synthetic || (!!c.bundle?.sources?.length && c.bundle.sources.every((s: any) => String(s.provider || "").startsWith("SYNTHETIC"))) || String(c.bundle?.quality_flags?.[0] || "").startsWith("SYNTHETIC case")
+
+/** hazard facts as one readable line (real ETL shapes: {level, share}, {perimeter_share, max_depth, by_depth},
+ *  {hail_50y_cm}, {sia261_zone, soil_class}); null when the shape is not recognised */
+export function fmtHazard(key: string, v: any): string | null {
+  if (!v || typeof v !== "object" || Array.isArray(v)) return null
+  const pct = (x: number) => `${Math.round(x * 100)}%`
+  if ("level" in v && "share" in v) return v.level === "none" || !v.share ? "No hazard zone" : `${humanise(String(v.level))} · ${pct(v.share)} of footprint`
+  if ("perimeter_share" in v) return v.perimeter_share ? `${pct(v.perimeter_share)} of perimeter${v.max_depth ? ` · max ${v.max_depth}` : ""}` : "No runoff zone"
+  if ("hail_50y_cm" in v) return v.hail_50y_cm == null ? "Unknown" : `${v.hail_50y_cm} cm hail (50-year)`
+  if ("sia261_zone" in v) return `Zone ${v.sia261_zone}${v.soil_class ? ` · soil class ${v.soil_class}` : ""}`
+  void key
+  return null
+}

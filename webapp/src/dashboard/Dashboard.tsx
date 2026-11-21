@@ -1,457 +1,498 @@
-// Underwriter dashboard (back-office). Spec: docs/FRONTEND_INTEGRATION.md. Never linked from the client app.
-// Narrative comes from output.json; every value, source, image and status from features_combined.json (§1).
+// Underwriter dashboard (back-office), Jira-like: each generated report is a ticket in a queue.
+// Data contract: docs/FRONTEND_INTEGRATION.md. Narrative from output.json; every value, source, image and status from
+// features_combined.json. Never linked from the client app.
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import {
-  buildIndex, resolve, humanise, fmtInline, fmtRange, fmtShare, isRange, isSynthetic, loadFromApi, loadFromFiles,
+  buildIndex, resolve, humanise, fmtInline, fmtHazard, fmtRange, fmtShare, isRange, isSynthetic, loadFromApi, loadFromFiles,
   READINESS, STATUS, PRICING, TARGET, PRIORITY_ORDER, FINDING_TYPE, type CaseData, type Index,
 } from "./data"
+import { getTicket, saveTicket, statusOf, inQueue, topPriority, QUEUES, STATUS_LABEL, STATUS_TONE, WORKFLOW, type Queue, type Status, type Ticket } from "./tickets"
 
-const TABS = ["Overview", "COPE", "Hazards", "Evidence", "Valuation", "Questions", "Export"] as const
-type Tab = (typeof TABS)[number]
+/** close a pop-up (menu, popover) on a click outside it or on Escape */
+function useDismiss(open: boolean, close: () => void) {
+  const ref = useRef<HTMLElement | null>(null)
+  useEffect(() => {
+    if (!open) return
+    const onDown = (e: PointerEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) close() }
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") close() }
+    document.addEventListener("pointerdown", onDown); document.addEventListener("keydown", onKey)
+    return () => { document.removeEventListener("pointerdown", onDown); document.removeEventListener("keydown", onKey) }
+  }, [open, close])
+  return ref
+}
+
+const keyOf = (c: CaseData) => String(c.output?.case_id || c.bundle?.case?.case_id || c.id).toUpperCase()
 
 export default function Dashboard() {
   const [cases, setCases] = useState<CaseData[] | null>(null)
   const [api, setApi] = useState(true)
   const [open, setOpen] = useState<string | null>(() => new URLSearchParams(location.search).get("case"))
+  const [queue, setQueue] = useState<Queue>("open")
+  const [, bump] = useState(0)   // re-render after a ticket change
   const pick = useRef<HTMLInputElement>(null)
 
   const reload = () => loadFromApi().then((c) => { if (c) setCases(c); else { setApi(false); setCases((p) => p ?? []) } })
   useEffect(() => { reload() }, [])
-  useEffect(() => { const u = new URL(location.href); if (open) u.searchParams.set("case", open); else { u.searchParams.delete("case"); u.searchParams.delete("tab") } history.replaceState(null, "", u) }, [open])
+  useEffect(() => { const u = new URL(location.href); if (open) u.searchParams.set("case", open); else u.searchParams.delete("case"); history.replaceState(null, "", u) }, [open])
   const onFolder = async (e: React.ChangeEvent<HTMLInputElement>) => { if (e.target.files?.length) { const c = await loadFromFiles(e.target.files); setCases((p) => [...c, ...(p || []).filter((x) => !c.some((y) => y.id === x.id))]) } }
+  const update = (id: string, patch: Partial<Ticket>) => { saveTicket(id, patch); bump((n) => n + 1) }
 
-  const current = cases?.find((c) => c.id === open)
+  const rows = (cases || []).map((c) => { const t = getTicket(c.id); return { c, t, s: statusOf(c, t) } })
+  const current = rows.find((x) => x.c.id === open)
   return (
-    <div className="db">
-      <header className="db-top no-print">
-        <button type="button" className="db-brand" onClick={() => setOpen(null)}>
-          <i><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinejoin="round" strokeLinecap="round"><path d="M3 11l9-7 9 7v9H3z" /><path d="M9 20v-6h6v6" /></svg></i>
-          AXAlotl <span>Underwriting</span>
+    <div className="jr">
+      <aside className="jr-side no-print">
+        <button type="button" className="jr-brand" onClick={() => setOpen(null)}>
+          <i><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinejoin="round" strokeLinecap="round"><path d="M3 11l9-7 9 7v9H3z" /><path d="M9 20v-6h6v6" /></svg></i>
+          <span><b>AXAlotl</b><small>Underwriting</small></span>
         </button>
-        <div className="db-top-actions">
-          {api && <button type="button" className="db-btn ghost" onClick={reload}>Refresh</button>}
-          <button type="button" className="db-btn ghost" onClick={() => pick.current?.click()}>Open a case folder</button>
+        <p className="jr-side-h">Queues</p>
+        <nav>{QUEUES.map(([q, label]) => (
+          <button key={q} type="button" className={"jr-q" + (q === queue && !current ? " on" : "")} onClick={() => { setQueue(q); setOpen(null) }}>
+            <span>{label}</span><span className="jr-count">{rows.filter((x) => inQueue(q, x.s, x.t)).length}</span>
+          </button>
+        ))}</nav>
+        <div className="jr-side-f">
+          {api && <button type="button" className="jr-sidebtn" onClick={reload}>Refresh</button>}
+          <button type="button" className="jr-sidebtn" onClick={() => pick.current?.click()}>Open a case folder</button>
           <input ref={pick} type="file" hidden multiple onChange={onFolder} {...({ webkitdirectory: "", directory: "" } as any)} />
         </div>
-      </header>
-      {!cases ? <p className="db-muted db-pad">Loading cases…</p>
-        : current ? <CasePage c={current} onBack={() => setOpen(null)} />
-        : <CaseList cases={cases} api={api} onOpen={setOpen} />}
+      </aside>
+      <main className="jr-main">
+        {!cases ? <p className="jr-muted">Loading…</p>
+          : current ? <Issue c={current.c} t={current.t} s={current.s} onBack={() => setOpen(null)} update={(p) => update(current.c.id, p)} queueLabel={QUEUES.find(([q]) => q === queue)![1]} />
+          : <QueueView rows={rows.filter((x) => inQueue(queue, x.s, x.t))} title={QUEUES.find(([q]) => q === queue)![1]} onOpen={setOpen} update={update} />}
+      </main>
     </div>
   )
 }
 
-/* ---------------- §2 case list ---------------- */
-function CaseList({ cases, api, onOpen }: { cases: CaseData[]; api: boolean; onOpen: (id: string) => void }) {
-  const rows = [...cases].sort((a, b) => String(b.metrics?.finished_at || "").localeCompare(String(a.metrics?.finished_at || "")))
+/* ---------------- queue (ticket list) ---------------- */
+type SortKey = "type" | "key" | "summary" | "requester" | "assignee" | "priority" | "status" | "created"
+const COLS: [SortKey, string][] = [["type", "Type"], ["key", "Key"], ["summary", "Summary"], ["requester", "Requester"], ["assignee", "Assignee"], ["priority", "Priority"], ["status", "Status"], ["created", "Created"]]
+const STATUS_ORDER: Status[] = ["generating", "failed", "to_review", "in_progress", "waiting_client", "resolved"]
+const createdOf = (c: CaseData) => String(c.metrics?.finished_at || c.metrics?.started_at || c.bundle?.case?.created_at || "")
+
+function QueueView({ rows, title, onOpen, update }: { rows: { c: CaseData; t: Ticket; s: Status }[]; title: string; onOpen: (id: string) => void; update: (id: string, p: Partial<Ticket>) => void }) {
+  // click a column header to sort by it (A→Z, then Z→A); Created sorts newest first, then oldest first
+  const [sort, setSort] = useState<{ k: SortKey; dir: 1 | -1 }>({ k: "created", dir: -1 })
+  const rowsX = rows.map((x) => {
+    const ix = buildIndex(x.c.bundle, x.c.output), cs = x.c.bundle?.case || {}
+    return { ...x, ix, cs, type: (ix.facts.get("ev.declared_industry")?.value?.label || "Building pre-assessment").split(" / ")[0], pr: topPriority(x.c.output) }
+  })
+  const val = (x: (typeof rowsX)[0]): string | number => {
+    switch (sort.k) {
+      case "type": return x.type
+      case "key": return keyOf(x.c)
+      case "summary": return x.cs.legal_company_name || keyOf(x.c)
+      case "requester": return x.cs.client_name || ""
+      case "assignee": return x.t.assignee === "me" ? "Me" : "~Unassigned"
+      case "priority": return PRIORITY_ORDER[x.pr || "z"] ?? 9
+      case "status": return STATUS_ORDER.indexOf(x.s)
+      case "created": return createdOf(x.c)
+    }
+  }
+  const sorted = [...rowsX].sort((a, b) => {
+    const va = val(a), vb = val(b)
+    const d = typeof va === "number" && typeof vb === "number" ? va - vb : String(va).localeCompare(String(vb), undefined, { sensitivity: "base", numeric: true })
+    return d * sort.dir || createdOf(b.c).localeCompare(createdOf(a.c))
+  })
+  const click = (k: SortKey) => setSort((p) => (p.k === k ? { k, dir: (p.dir * -1) as 1 | -1 } : { k, dir: k === "created" ? -1 : 1 }))
+  const dirLabel = (k: SortKey) => (k === "created" ? (sort.dir < 0 ? "newest first" : "oldest first") : k === "priority" ? (sort.dir > 0 ? "highest first" : "lowest first") : sort.dir > 0 ? "A to Z" : "Z to A")
   return (
-    <main className="db-pad">
-      <div className="db-head"><h1>Cases</h1><p className="db-muted">{rows.length} case{rows.length === 1 ? "" : "s"} · {api ? "reports/ folder" : "opened from disk"}</p></div>
-      {!rows.length ? (
-        <div className="db-card db-empty">
-          <p><b>No case yet.</b> Generate one with <code>python -m src.report --input input.json --output reports/&lt;case&gt;</code> (repo root), then refresh — or open a case folder from disk.</p>
-        </div>
-      ) : (
-        <div className="db-card db-tablewrap">
-          <table className="db-table">
-            <thead><tr><th>Case</th><th>Company · address</th><th>Client</th><th>Industry (declared / register)</th><th>Readiness</th><th className="num">Findings</th><th className="num">Questions</th><th>Report</th><th>Date</th></tr></thead>
-            <tbody>
-              {rows.map((c) => {
-                const ix = buildIndex(c.bundle, c.output), cs = c.bundle?.case || {}, st = c.metrics?.status
-                const qs = c.output?.open_questions || [], blocking = qs.filter((q: any) => q.blocking_initial_pricing).length
-                const ready = c.output?.executive_summary?.underwriting_readiness
-                const available = (st ? st === "succeeded" : true) && !!c.output
-                return (
-                  <tr key={c.id} onClick={() => onOpen(c.id)} tabIndex={0} onKeyDown={(e) => { if (e.key === "Enter") onOpen(c.id) }}>
-                    <td><b>{c.output?.case_id || cs.case_id || c.id}</b>{isSynthetic(c) && <span className="db-tag synth">Synthetic</span>}</td>
-                    <td>{cs.legal_company_name || "—"}<div className="db-muted">{cs.building_address || ""}</div></td>
-                    <td>{cs.client_name || "—"}</td>
-                    <td>{ix.facts.get("ev.declared_industry")?.value?.label || "—"}<div className="db-muted">{fmtInline(ix.facts.get("feat.business_sector")?.value) ?? "—"}</div></td>
-                    <td>{ready ? <Pill kind={READINESS[ready]?.[1] || "grey"}>{READINESS[ready]?.[0] || ready}</Pill> : "—"}</td>
-                    <td className="num">{c.output ? c.output.priority_findings?.length ?? 0 : "—"}</td>
-                    <td className="num">{c.output ? <>{qs.length}{blocking ? <span className="db-muted"> · {blocking} blocking</span> : null}</> : "—"}</td>
-                    <td><RunState st={st} available={available} /></td>
-                    <td className="db-muted">{(c.metrics?.finished_at || cs.created_at || "").slice(0, 10) || "—"}</td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
+    <>
+      <div className="jr-crumbs">Underwriting <span>/</span> Cases</div>
+      <h1 className="jr-h1">{title}</h1>
+      {!sorted.length ? <p className="jr-empty">No case in this queue.</p> : (
+        <table className="jr-table">
+          <thead><tr>{COLS.map(([k, label]) => (
+            <th key={k} aria-sort={sort.k === k ? (sort.dir > 0 ? "ascending" : "descending") : "none"}>
+              <button type="button" className={"jr-sort" + (sort.k === k ? " on" : "")} onClick={() => click(k)} title={sort.k === k ? `Sorted ${dirLabel(k)}` : `Sort by ${label.toLowerCase()}`}>
+                {label}<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{sort.k !== k ? <path d="M7 9l5-5 5 5M7 15l5 5 5-5" /> : sort.dir > 0 ? <path d="M6 15l6-6 6 6" /> : <path d="M6 9l6 6 6-6" />}</svg>
+              </button>
+            </th>
+          ))}</tr></thead>
+          <tbody>{sorted.map(({ c, t, s, cs, type, pr }) => (
+            <tr key={c.id} className="jr-rowlink" tabIndex={0} aria-label={`Open ${cs.legal_company_name || keyOf(c)}`}
+              onClick={(e) => { if (!(e.target as HTMLElement).closest("button, select, a, input, label, .jr-menu")) onOpen(c.id) }}
+              onKeyDown={(e) => { if (e.key === "Enter" && e.target === e.currentTarget) onOpen(c.id) }}>
+              <td><span className="jr-type"><TypeIcon />{type}</span></td>
+              <td className="jr-key">{keyOf(c)}</td>
+              <td><button type="button" className="jr-link" onClick={() => onOpen(c.id)}>{cs.legal_company_name || keyOf(c)}</button>{cs.building_address && <div className="jr-sub"><MapLink address={cs.building_address} /></div>}</td>
+              <td>{cs.client_name || "—"}</td>
+              <td><Assignee value={t.assignee} onChange={(a) => update(c.id, { assignee: a })} /></td>
+              <td>{pr ? <Priority p={pr} /> : <span className="jr-muted">—</span>}</td>
+              <td><StatusMenu s={s} onChange={(x) => update(c.id, { status: x })} />{isSynthetic(c) && <span className="jr-loz tone-purple small">Synthetic</span>}</td>
+              <td className="jr-muted jr-date">{fmtDate(createdOf(c))}</td>
+            </tr>
+          ))}</tbody>
+        </table>
       )}
-    </main>
+    </>
   )
 }
-function RunState({ st, available }: { st?: string; available: boolean }) {
-  if (st === "running") return <Pill kind="blue">Generating…</Pill>
-  if (st === "invalid_report") return <Pill kind="red">Invalid report</Pill>
-  if (st === "failed") return <Pill kind="red">Pipeline failed</Pill>
-  return available ? <Pill kind="ok">Available</Pill> : <Pill kind="grey">No report</Pill>
-}
-
-/* ---------------- §3 case page ---------------- */
-function CasePage({ c, onBack }: { c: CaseData; onBack: () => void }) {
-  const [tab, setTab] = useState<Tab>(() => { const q = new URLSearchParams(location.search).get("tab"); return (TABS as readonly string[]).includes(q || "") ? (q as Tab) : "Overview" })
-  useEffect(() => { const u = new URL(location.href); u.searchParams.set("tab", tab); history.replaceState(null, "", u) }, [tab])
+const fmtDate = (iso: string) => { if (!iso) return "—"; const d = new Date(iso); return isNaN(+d) ? iso.slice(0, 10) : d.toLocaleString("en-GB", { day: "2-digit", month: "short", year: "numeric", hour: iso.length > 10 ? "2-digit" : undefined, minute: iso.length > 10 ? "2-digit" : undefined }) }
+/* ---------------- issue (one case) ---------------- */
+type Tab = "findings" | "questions" | "risk" | "evidence" | "valuation"
+function Issue({ c, t, s, onBack, update, queueLabel }: { c: CaseData; t: Ticket; s: Status; onBack: () => void; update: (p: Partial<Ticket>) => void; queueLabel: string }) {
   const r = c.output, b = c.bundle, m = c.metrics
   const ix = useMemo(() => buildIndex(b, r), [b, r])
-  const synthetic = isSynthetic(c)
-  const st = m?.status
-  const etl = (m?.stages || []).find((s: any) => s.stage === "etl")
-  const showReport = !!r && (!st || st === "succeeded")
+  const [tab, setTab] = useState<Tab>(() => (new URLSearchParams(location.search).get("tab") as Tab) || "findings")
+  const [menu, setMenu] = useState(false)
+  const menuRef = useDismiss(menu, () => setMenu(false))
+  const ok = !!r && (!m?.status || m.status === "succeeded")
+  const es = r?.executive_summary || {}
+  const etl = (m?.stages || []).find((x: any) => x.stage === "etl")
+  const answered = new Set(t.answered || [])
+  const counts: Record<Tab, number | null> = { findings: r?.priority_findings?.length ?? 0, questions: r?.open_questions?.length ?? 0, risk: null, evidence: null, valuation: null }
+  const dl = (obj: unknown, name: string) => { const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([JSON.stringify(obj, null, 2)], { type: "application/json" })); a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000) }
 
   return (
-    <main className="db-pad">
-      <button type="button" className="db-back no-print" onClick={onBack}>← All cases</button>
-      {synthetic && <div className="db-banner synth">SYNTHETIC CASE — fictional data for testing, not usable for real underwriting.</div>}
+    <div className="jr-issue">
+      <div className="jr-col">
+        <div className="jr-crumbs no-print"><button type="button" onClick={onBack}>{queueLabel}</button> <span>/</span> {keyOf(c)}</div>
+        {isSynthetic(c) && <div className="jr-flag purple">Synthetic case: fictional data, not for real underwriting.</div>}
+        {m?.status === "failed" && <div className="jr-flag red">Pipeline failed{m.error?.stage ? ` at ${m.error.stage}` : ""}: {m.error?.message}</div>}
+        {m?.status === "invalid_report" && <div className="jr-flag red">The report did not pass validation and is not shown ({(m.validation?.issues || []).filter((i: any) => i.severity === "error").length} errors).</div>}
+        {m?.status === "running" && <div className="jr-flag blue">Report being generated ({m.stages?.[m.stages.length - 1]?.stage || "starting"}).</div>}
+        {etl?.status === "warning" && <div className="jr-flag yellow">Some sources were unavailable: {Object.entries(etl.evidence_blocks || {}).filter(([, v]) => v !== "ok").map(([k]) => humanise(k)).join(", ")}.</div>}
 
-      {/* §6 pipeline states */}
-      {st === "running" && <div className="db-banner info">Report being generated — current stage: <b>{m.stages?.[m.stages.length - 1]?.stage || "starting"}</b>.</div>}
-      {st === "invalid_report" && (
-        <div className="db-banner err"><b>The model's report did not pass validation.</b> It is not shown.
-          <ul>{(m.validation?.issues || []).filter((i: any) => i.severity === "error").map((i: any, k: number) => <li key={k}><code>{i.code}</code> {i.path}: {i.message}</li>)}</ul>
-        </div>
-      )}
-      {st === "failed" && <div className="db-banner err"><b>Pipeline failed</b>{m.error?.stage ? <> at stage <code>{m.error.stage}</code></> : null}: {m.error?.message || "no detail"}</div>}
-      {etl?.status === "warning" && (
-        <div className="db-banner warn">Some sources were unavailable — the report is valid but built on less evidence.
-          {etl.evidence_blocks && <span className="db-muted"> {Object.entries(etl.evidence_blocks).filter(([, v]) => v !== "ok").map(([k, v]) => `${humanise(k)}: ${v}`).join(" · ")}</span>}
-        </div>
-      )}
-
-      <div className="db-head">
-        <h1>{r?.executive_summary?.headline || b?.case?.legal_company_name || c.id}</h1>
-        <div className="db-head-meta">
-          {r?.executive_summary?.underwriting_readiness && <Pill kind={READINESS[r.executive_summary.underwriting_readiness]?.[1] || "grey"} big>{READINESS[r.executive_summary.underwriting_readiness]?.[0]}</Pill>}
-          <span className="db-muted">Case {r?.case_id || b?.case?.case_id || c.id}</span>
-        </div>
-      </div>
-
-      <nav className="db-tabs no-print" role="tablist">
-        {TABS.map((t) => <button key={t} type="button" role="tab" aria-selected={tab === t} className={tab === t ? "on" : ""} onClick={() => setTab(t)}>{t}</button>)}
-      </nav>
-
-      {/* every panel is rendered; only the active one shows on screen, all of them in print */}
-      <Panel on={tab === "Overview"} title="Overview">{showReport ? <Overview r={r} b={b} ix={ix} /> : <Identity b={b} />}</Panel>
-      {showReport && <>
-        <Panel on={tab === "COPE"} title="COPE"><Cope r={r} ix={ix} /></Panel>
-        <Panel on={tab === "Hazards"} title="Hazards"><Hazards r={r} ix={ix} /></Panel>
-        <Panel on={tab === "Evidence"} title="Evidence"><Evidence c={c} r={r} b={b} ix={ix} synthetic={synthetic} /></Panel>
-        <Panel on={tab === "Valuation"} title="Valuation"><Valuation r={r} ix={ix} /></Panel>
-        <Panel on={tab === "Questions"} title="Outstanding questions"><Questions r={r} ix={ix} /></Panel>
-      </>}
-      {!showReport && tab !== "Overview" && tab !== "Export" && <p className="db-muted">No valid report for this case.</p>}
-      <Panel on={tab === "Export"} title="Export" noPrint><Export c={c} /></Panel>
-    </main>
-  )
-}
-function Panel({ on, title, children, noPrint }: { on: boolean; title: string; children: ReactNode; noPrint?: boolean }) {
-  return <section className={"db-panel" + (on ? " on" : "") + (noPrint ? " no-print" : "")} role="tabpanel"><h2 className="print-only">{title}</h2>{children}</section>
-}
-
-/* §3.1 */
-function Overview({ r, b, ix }: { r: any; b: any; ix: Index }) {
-  const es = r.executive_summary || {}
-  const top = [...(r.priority_findings || [])].sort((x, y) => (PRIORITY_ORDER[x.priority] ?? 9) - (PRIORITY_ORDER[y.priority] ?? 9)).slice(0, 5)
-  return (
-    <div className="db-grid2">
-      <div className="db-stack">
-        <div className="db-card"><div className="db-card-b"><p>{es.overview}</p>{es.key_takeaway && <div className="db-callout">{es.key_takeaway}</div>}<Chips ids={es.critical_fact_ids} ix={ix} /></div></div>
-        {r.underwriter_next_step && <div className="db-card db-next"><div className="db-card-h">Next step for the underwriter</div><div className="db-card-b">{r.underwriter_next_step}</div></div>}
-        <h3 className="db-h3">Priority findings</h3>
-        {top.map((f) => <FindingCard key={f.id} f={f} r={r} ix={ix} />)}
-        {(r.priority_findings || []).length > 5 && <p className="db-muted">{r.priority_findings.length - 5} more finding(s) in print.</p>}
-      </div>
-      <Identity b={b} />
-    </div>
-  )
-}
-function Identity({ b }: { b: any }) {
-  const cs = b?.case || {}, bd = b?.building || {}
-  const rows: [string, ReactNode][] = [
-    ["Company", cs.legal_company_name], ["Building address", cs.building_address], ["Client", cs.client_name],
-    ["Company UID", bd.company_uid || <span className="db-unknown">Unknown</span>],
-    ["EGID", bd.identity_resolution === "unique" && bd.egid ? bd.egid : <span className="db-unknown">Unresolved</span>],
-    ["Canton", bd.canton], ["Evidence date", cs.created_at],
-  ]
-  return (
-    <aside className="db-card db-identity">
-      <div className="db-card-h">Identity</div>
-      <dl className="db-card-b db-kv">{rows.map(([k, v]) => <div key={k}><dt>{k}</dt><dd>{v ?? <span className="db-unknown">Unknown</span>}</dd></div>)}</dl>
-    </aside>
-  )
-}
-
-/* §3.4 */
-function FindingCard({ f, r, ix }: { f: any; r: any; ix: Index }) {
-  const related = (r.open_questions || []).filter((q: any) => (q.trigger_finding_ids || []).includes(f.id))
-  return (
-    <article className={"db-card db-finding p-" + f.priority} id={"finding-" + f.id}>
-      <div className="db-card-h">
-        <Pill kind={f.priority === "critical" ? "red" : f.priority === "high" ? "orange" : f.priority === "medium" ? "amber" : "grey"}>{f.priority}</Pill>
-        <b>{f.title}</b>
-        <span className="db-muted db-right">{FINDING_TYPE[f.finding_type] || f.finding_type} · confidence {f.confidence}</span>
-      </div>
-      <div className="db-card-b db-finding-b">
-        <div><h4>Observation</h4><p>{f.observation}</p></div>
-        <div><h4>Implication</h4><p>{f.underwriting_implication}</p></div>
-        <div><h4>Recommended action</h4><p>{f.recommended_action}</p></div>
-      </div>
-      <div className="db-card-f">
-        <Chips ids={[...(f.fact_ids || []), ...(f.evidence_ids || [])]} ix={ix} />
-        {(f.coverage_components || []).length > 0 && <div className="db-tags">{f.coverage_components.map((x: string) => <span key={x} className="db-tag">{humanise(x)}</span>)}</div>}
-        {related.map((q: any) => <div key={q.id} className="db-related">Related question: <b>{q.id}</b> — {q.question}{q.blocking_initial_pricing && <Pill kind="red">Blocks initial pricing</Pill>}</div>)}
-      </div>
-    </article>
-  )
-}
-
-/* §3.2 */
-function Cope({ r, ix }: { r: any; ix: Index }) {
-  return (
-    <div className="db-grid2 even">
-      {(["construction", "occupancy", "protection", "exposure"] as const).map((k) => {
-        const c = r.cope?.[k] || {}
-        return (
-          <div key={k} className="db-card">
-            <div className="db-card-h"><span className="db-muted db-cap">{k}</span><b>{c.headline}</b></div>
-            <div className="db-card-b"><p>{c.interpretation}</p><Chips ids={[...(c.fact_ids || []), ...(c.evidence_ids || [])]} ix={ix} /></div>
-            {(c.unknown_feature_ids || []).length > 0 && (
-              <div className="db-card-f"><h4>Gaps</h4><div className="db-chips">{c.unknown_feature_ids.map((id: string) => <span key={id} className="db-chip s-grey">{humanise(ix.facts.get(id)?.field_key || id)} · Unknown</span>)}</div></div>
-            )}
+        <h1 className="jr-h1 issue">{es.headline || b?.case?.legal_company_name || keyOf(c)}</h1>
+        <div className="jr-actions no-print">
+          <StatusMenu s={s} onChange={(x) => update({ status: x })} big />
+          {s !== "resolved" && s !== "failed" && s !== "generating" && <button type="button" className="jr-btn" onClick={() => update({ status: "resolved" })}>Resolve</button>}
+          <div className="jr-more" ref={menuRef as React.RefObject<HTMLDivElement>}>
+            <button type="button" className="jr-btn ghost icon" aria-expanded={menu} onClick={() => setMenu(!menu)} aria-label="Export" title="Export">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 15V4M7.5 8.5L12 4l4.5 4.5M5 14v5h14v-5" /></svg>
+            </button>
+            {menu && <div className="jr-menu">
+              <button type="button" onClick={() => { setMenu(false); print() }}>Print / PDF</button>
+              {r && <button type="button" onClick={() => dl(r, `${keyOf(c)}.output.json`)}>Download output.json</button>}
+              {b && <button type="button" onClick={() => dl(b, `${keyOf(c)}.features_combined.json`)}>Download features_combined.json</button>}
+            </div>}
           </div>
-        )
-      })}
+        </div>
+
+        {ok && <>
+          {es.key_takeaway && <p className="jr-lead">{es.key_takeaway}</p>}
+          {r.underwriter_next_step && <div className="jr-next"><span className="jr-next-h">Next step</span>{r.underwriter_next_step}</div>}
+          <h2 className="jr-h2">Description</h2>
+          <Clamp text={es.overview} />
+
+          <div className="jr-tabs no-print" role="tablist">
+            {(["findings", "questions", "risk", "evidence", "valuation"] as Tab[]).map((k) => (
+              <button key={k} type="button" role="tab" aria-selected={tab === k} className={tab === k ? "on" : ""} onClick={() => setTab(k)}>
+                {humanise(k)}{counts[k] !== null && <span className="jr-count">{counts[k]}</span>}
+              </button>
+            ))}
+          </div>
+          <Panel on={tab === "findings"} title="Findings"><Findings r={r} ix={ix} /></Panel>
+          <Panel on={tab === "questions"} title="Questions"><Questions r={r} ix={ix} answered={answered} toggle={(id) => { const n = new Set(answered); if (n.has(id)) n.delete(id); else n.add(id); update({ answered: [...n] }) }} /></Panel>
+          <Panel on={tab === "risk"} title="Risk"><Risk r={r} ix={ix} /></Panel>
+          <Panel on={tab === "evidence"} title="Evidence"><Evidence c={c} r={r} b={b} ix={ix} /></Panel>
+          <Panel on={tab === "valuation"} title="Valuation"><Valuation r={r} ix={ix} /></Panel>
+        </>}
+      </div>
+
+      <aside className="jr-details">
+        <div className="jr-box">
+          <div className="jr-box-h">Details</div>
+          <dl className="jr-kv">
+            <div><dt>Assignee</dt><dd><Assignee value={t.assignee} onChange={(a) => update({ assignee: a })} /></dd></div>
+            <div><dt>Readiness</dt><dd>{es.underwriting_readiness ? <span className={"jr-loz tone-" + toneOfReadiness(es.underwriting_readiness)}>{READINESS[es.underwriting_readiness]?.[0]}</span> : "—"}</dd></div>
+            <div><dt>Priority</dt><dd>{topPriority(r) ? <Priority p={topPriority(r)!} /> : "—"}</dd></div>
+            <div><dt>Requester</dt><dd>{b?.case?.client_name || "—"}</dd></div>
+            <div><dt>Company</dt><dd>{b?.case?.legal_company_name || "—"}</dd></div>
+            <div><dt>Address</dt><dd>{b?.case?.building_address ? <MapLink address={b.case.building_address} /> : "—"}</dd></div>
+            <div><dt>Activity</dt><dd>{ix.facts.get("ev.declared_industry")?.value?.label || "—"}</dd></div>
+            <div><dt>EGID</dt><dd>{b?.building?.identity_resolution === "unique" && b?.building?.egid ? b.building.egid : <span className="jr-unknown">Unresolved</span>}</dd></div>
+            <div><dt>UID</dt><dd>{b?.building?.company_uid || <span className="jr-unknown">Unknown</span>}</dd></div>
+            <div><dt>Created</dt><dd>{(m?.finished_at || b?.case?.created_at || "").slice(0, 10) || "—"}</dd></div>
+          </dl>
+        </div>
+        {m && <details className="jr-run no-print"><summary>Run details</summary>
+          <p>{m.model_config || "?"} · {m.duration_s ?? "?"} s · {m.llm?.input_tokens ?? "?"} / {m.llm?.output_tokens ?? "?"} tokens · USD {m.total_usd ?? "?"}</p>
+          <ul>{(m.stages || []).map((x: any, k: number) => <li key={k}>{x.stage}: {x.status}</li>)}</ul>
+        </details>}
+      </aside>
     </div>
   )
 }
+const toneOfReadiness = (k: string) => ({ ok: "green", amber: "yellow", orange: "yellow", red: "red" } as Record<string, string>)[READINESS[k]?.[1] || ""] || "grey"
+function Panel({ on, title, children }: { on: boolean; title: string; children: ReactNode }) {
+  return <section className={"jr-panel" + (on ? " on" : "")} role="tabpanel"><h2 className="jr-h2 print-only">{title}</h2>{children}</section>
+}
 
-/* §3.3 */
+/* findings: one row each, details on demand */
+function Findings({ r, ix }: { r: any; ix: Index }) {
+  const fs = [...(r.priority_findings || [])].sort((x, y) => (PRIORITY_ORDER[x.priority] ?? 9) - (PRIORITY_ORDER[y.priority] ?? 9))
+  if (!fs.length) return <p className="jr-empty">No finding.</p>
+  return <><PriorityLegend /><ul className="jr-rows">{fs.map((f) => {
+    const related = (r.open_questions || []).filter((q: any) => (q.trigger_finding_ids || []).includes(f.id))
+    return (
+      <li key={f.id} id={"finding-" + f.id}>
+        <details>
+          <summary><Priority p={f.priority} iconOnly /><span className="jr-row-t">{f.title}</span><span className="jr-loz tone-grey">{FINDING_TYPE[f.finding_type] || f.finding_type}</span></summary>
+          <div className="jr-row-b">
+            <dl className="jr-kv wide">
+              <div><dt>Observation</dt><dd>{f.observation}</dd></div>
+              <div><dt>Implication</dt><dd>{f.underwriting_implication}</dd></div>
+              <div><dt>Action</dt><dd>{f.recommended_action}</dd></div>
+              {related.length > 0 && <div><dt>Questions</dt><dd>{related.map((q: any) => <span key={q.id} className="jr-rel">{q.id} {q.blocking_initial_pricing && <span className="jr-loz tone-red small">Blocking</span>}</span>)}</dd></div>}
+            </dl>
+            <Chips ids={[...(f.fact_ids || []), ...(f.evidence_ids || [])]} ix={ix} />
+          </div>
+        </details>
+      </li>
+    )
+  })}</ul></>
+}
+
+/* questions: a checklist (answered is kept per case) */
+function Questions({ r, ix, answered, toggle }: { r: any; ix: Index; answered: Set<string>; toggle: (id: string) => void }) {
+  const qs = [...(r.open_questions || [])].sort((a, b) => Number(!!b.blocking_initial_pricing) - Number(!!a.blocking_initial_pricing) || (PRIORITY_ORDER[a.priority] ?? 9) - (PRIORITY_ORDER[b.priority] ?? 9))
+  if (!qs.length) return <p className="jr-empty">No open question.</p>
+  return <><PriorityLegend extra /><ul className="jr-rows">{qs.map((q) => (
+    <li key={q.id} className={answered.has(q.id) ? "done" : ""}>
+      <details>
+        <summary>
+          <input type="checkbox" checked={answered.has(q.id)} onChange={() => toggle(q.id)} onClick={(e) => e.stopPropagation()} aria-label={"Answered: " + q.question} />
+          <Priority p={q.priority} iconOnly />
+          <span className="jr-row-t">{q.question}</span>
+          <span className="jr-muted">{TARGET[q.target] || q.target}</span>
+          {q.blocking_initial_pricing && <span className="jr-loz tone-red">Blocking</span>}
+        </summary>
+        <div className="jr-row-b">
+          <dl className="jr-kv wide">
+            <div><dt>Why</dt><dd>{q.reason_for_underwriter}</dd></div>
+            <div><dt>Expected</dt><dd>{q.expected_answer_or_document}</dd></div>
+            {(q.trigger_finding_ids || []).length > 0 && <div><dt>Findings</dt><dd>{q.trigger_finding_ids.join(", ")}</dd></div>}
+          </dl>
+          <Chips ids={q.feature_ids || []} ix={ix} />
+        </div>
+      </details>
+    </li>
+  ))}</ul></>
+}
+
+/* COPE + hazards */
 const INDUSTRIAL = ["site_industrial_processes", "high_temperature_operations", "gas_installations", "flammable_material_storage", "business_sector"]
-function Hazards({ r, ix }: { r: any; ix: Index }) {
+function Risk({ r, ix }: { r: any; ix: Index }) {
   const hz = r.hazard_interpretations || []
-  const fire = hz.find((h: any) => h.peril === "fire")
   const ind = INDUSTRIAL.map((k) => ix.byKey.get(k)).filter(Boolean)
   return (
-    <div className="db-stack">
-      <div className="db-card db-tablewrap">
-        <table className="db-table static">
-          <thead><tr><th>Peril</th><th>Measurement</th><th>Interpretation</th><th>Pricing role</th><th>Follow-up</th></tr></thead>
-          <tbody>{!hz.length && <tr><td colSpan={5} className="db-muted">No hazard interpreted in this report.</td></tr>}{hz.map((h: any, k: number) => {
-            const meas = (h.fact_ids || []).map((id: string) => ix.facts.get(id)).filter((f: any) => f && /_exposure$|hazard|zone/.test(f.field_key))
+    <>
+      <h3 className="jr-h3">COPE</h3>
+      <ul className="jr-rows">{(["construction", "occupancy", "protection", "exposure"] as const).map((k) => {
+        const x = r.cope?.[k] || {}
+        return (
+          <li key={k}><details>
+            <summary><span className="jr-cope">{humanise(k)}</span><span className="jr-row-t">{x.headline}</span>{(x.unknown_feature_ids || []).length > 0 && <span className="jr-loz tone-grey">{x.unknown_feature_ids.length} unknown</span>}</summary>
+            <div className="jr-row-b"><p className="jr-text">{x.interpretation}</p><Chips ids={[...(x.fact_ids || []), ...(x.evidence_ids || [])]} ix={ix} />
+              {(x.unknown_feature_ids || []).length > 0 && <div className="jr-chips">{x.unknown_feature_ids.map((id: string) => <span key={id} className="jr-chip s-grey">{humanise(ix.facts.get(id)?.field_key || id)}: unknown</span>)}</div>}</div>
+          </details></li>
+        )
+      })}</ul>
+      <h3 className="jr-h3">Natural hazards</h3>
+      {!hz.length ? <p className="jr-empty">No hazard interpreted.</p> : (
+        <table className="jr-table compact">
+          <thead><tr><th>Peril</th><th>Measurement</th><th>Pricing role</th><th /></tr></thead>
+          <tbody>{hz.map((h: any, k: number) => {
+            const meas = (h.fact_ids || []).map((id: string) => ix.facts.get(id)).filter((f: any) => f && /_exposure$/.test(f.field_key))
             return (
               <tr key={k}>
-                <td><b>{humanise(h.peril)}</b></td>
-                <td>{meas.length ? meas.map((f: any) => <div key={f.id}><Value v={f.value} unit={f.unit} k={f.field_key} /></div>) : <span className="db-muted">—</span>}</td>
-                <td>{h.interpretation}<Chips ids={[...(h.fact_ids || []), ...(h.evidence_ids || [])]} ix={ix} /></td>
+                <td><b>{humanise(h.peril)}</b><div className="jr-sub">{h.interpretation}</div></td>
+                <td>{meas.length ? meas.map((f: any) => <div key={f.id}><Value v={f.value} unit={f.unit} k={f.field_key} /></div>) : "—"}</td>
                 <td>{PRICING[h.pricing_role] || h.pricing_role}</td>
-                <td>{h.follow_up_needed ? <span className="db-flag" title="Follow-up needed">⚑ Needed</span> : <span className="db-muted">—</span>}</td>
+                <td>{h.follow_up_needed && <span className="jr-loz tone-yellow">Follow-up</span>}</td>
               </tr>
             )
           })}</tbody>
         </table>
-      </div>
-      <p className="db-note">Swiss private natural-hazards cover is written at a regulated tariff; hazard data supports underwriting and prevention, not an individual surcharge.</p>
-      {(ind.length > 0 || fire) && (
-        <div className="db-card">
-          <div className="db-card-h"><b>Industrial fire exposure</b></div>
-          <div className="db-card-b">
-            {fire && <p>{fire.interpretation}</p>}
-            {ind.length > 0 && <dl className="db-kv">{ind.map((f: any) => <div key={f.id}><dt>{humanise(f.field_key)}</dt><dd><Value v={f.value} unit={f.unit} k={f.field_key} /> <StatusBadge f={f} /></dd></div>)}</dl>}
-          </div>
-        </div>
       )}
-    </div>
+      <p className="jr-foot">Regulated tariff: hazard data supports underwriting and prevention, not an individual surcharge.</p>
+      {ind.length > 0 && <>
+        <h3 className="jr-h3">Industrial fire exposure</h3>
+        <dl className="jr-kv wide">{ind.map((f: any) => <div key={f.id}><dt>{humanise(f.field_key)}</dt><dd><Value v={f.value} unit={f.unit} k={f.field_key} /> <StatusBadge f={f} /></dd></div>)}</dl>
+      </>}
+    </>
   )
 }
 
-/* §3.5 + §5 */
-function Evidence({ c, r, b, ix, synthetic }: { c: CaseData; r: any; b: any; ix: Index; synthetic: boolean }) {
+/* evidence: images first, the rest folded */
+function Evidence({ c, r, b, ix }: { c: CaseData; r: any; b: any; ix: Index }) {
   const cited = useMemo(() => new Set(JSON.stringify(r).match(/"(src_\d+|SRC\d+)"/g)?.map((s) => s.slice(1, -1)) || []), [r])
   const warns = [...(c.validation?.issues || []), ...(c.metrics?.validation?.issues || [])].filter((i: any) => i.severity === "warning")
   return (
-    <div className="db-stack">
-      {(r.visual_evidence || []).length > 0 && <><h3 className="db-h3">Images</h3><div className="db-grid2 even">{r.visual_evidence.map((v: any) => <VisualCard key={v.visual_id} sel={v} c={c} ix={ix} synthetic={synthetic} />)}</div></>}
-      <h3 className="db-h3">Sources</h3>
-      <div className="db-card"><ul className="db-sources">{(b.sources || []).map((s: any) => (
-        <li key={s.id}><code>{s.id}</code> <b>{s.provider}</b> — {s.url ? <a href={s.url} target="_blank" rel="noreferrer">{s.title}</a> : s.title}
-          <span className="db-muted"> · retrieved {s.retrieved_at || "?"}{s.usage_or_attribution ? ` · ${s.usage_or_attribution}` : ""}</span>{!cited.has(s.id) && <span className="db-tag">not cited</span>}</li>
-      ))}</ul></div>
-      <h3 className="db-h3">Evidence register</h3>
-      <div className="db-card db-tablewrap">
-        <table className="db-table static">
-          <thead><tr><th>ID</th><th>Field</th><th>Value</th><th>Status</th><th>Scope</th><th>Confidence</th><th>Sources</th></tr></thead>
+    <>
+      {(r.visual_evidence || []).length > 0 && <div className="jr-visuals">{r.visual_evidence.map((v: any) => <VisualCard key={v.visual_id} sel={v} c={c} ix={ix} />)}</div>}
+      {(() => {
+        const chosen = new Set((r.visual_evidence || []).map((v: any) => v.visual_id)), rest = (b.visuals || []).filter((v: any) => !chosen.has(v.id))
+        return rest.length > 0 && (
+          <details className="jr-fold"><summary>Other images <span className="jr-count">{rest.length}</span></summary>
+            <div className="jr-visuals">{rest.map((v: any) => <VisualCard key={v.id} sel={{ visual_id: v.id, title: humanise(v.id.replace(/^vis\./, "")), caption: v.alt_text, annotation_ids: [] }} c={c} ix={ix} />)}</div>
+          </details>
+        )
+      })()}
+      <details className="jr-fold" open={!(r.visual_evidence || []).length}>
+        <summary>Sources <span className="jr-count">{(b.sources || []).length}</span></summary>
+        <ul className="jr-list">{(b.sources || []).map((s: any) => (
+          <li key={s.id}><span className="jr-key">{s.id}</span> {s.url ? <a href={s.url} target="_blank" rel="noreferrer">{s.provider}: {s.title}</a> : <>{s.provider}: {s.title}</>}{!cited.has(s.id) && <span className="jr-muted"> · not cited</span>}</li>
+        ))}</ul>
+      </details>
+      <details className="jr-fold">
+        <summary>Evidence register <span className="jr-count">{(b.facts || []).length}</span></summary>
+        <table className="jr-table compact">
+          <thead><tr><th>Field</th><th>Value</th><th>Status</th><th>Scope</th></tr></thead>
           <tbody>{(b.facts || []).map((f: any) => (
-            <tr key={f.id}>
-              <td><code>{f.id}</code></td><td>{humanise(f.field_key)}</td><td className="db-val"><Value v={f.value} unit={f.unit} k={f.field_key} long /></td>
-              <td><StatusBadge f={f} /></td><td>{scopeLabel(f.site_scope)}</td><td>{f.confidence}</td>
-              <td><Chips ids={f.source_ids || []} ix={ix} /></td>
-            </tr>
+            <tr key={f.id}><td>{humanise(f.field_key)}</td><td className="jr-val"><Value v={f.value} unit={f.unit} k={f.field_key} long /></td><td><StatusBadge f={f} /></td><td className="jr-muted">{scopeLabel(f.site_scope)}</td></tr>
           ))}</tbody>
         </table>
-      </div>
-      {((b.quality_flags || []).length > 0 || warns.length > 0) && <>
-        <h3 className="db-h3">Data quality notes</h3>
-        <div className="db-card"><ul className="db-sources">
-          {(b.quality_flags || []).map((q: string, k: number) => <li key={"q" + k}>{q.startsWith("CONFLICT") && <span className="db-warn">⚠ </span>}{q}</li>)}
-          {warns.map((w: any, k: number) => <li key={"w" + k}><code>{w.code}</code> {w.message}</li>)}
-        </ul></div>
-      </>}
-    </div>
+      </details>
+      {((b.quality_flags || []).length > 0 || warns.length > 0) && (
+        <details className="jr-fold">
+          <summary>Data quality <span className="jr-count">{(b.quality_flags || []).length + warns.length}</span></summary>
+          <ul className="jr-list">{(b.quality_flags || []).map((q: string, k: number) => <li key={"q" + k}>{q.startsWith("CONFLICT") && "⚠ "}{q}</li>)}{warns.map((w: any, k: number) => <li key={"w" + k}>{w.message}</li>)}</ul>
+        </details>
+      )}
+    </>
   )
 }
-const scopeLabel = (s: string) => (s === "company" ? "company-wide, not confirmed at this building" : humanise(s || "unknown"))
+const scopeLabel = (s: string) => (s === "company" ? "company-wide, not this building" : humanise(s || "unknown"))
 
-function VisualCard({ sel, c, ix, synthetic }: { sel: any; c: CaseData; ix: Index; synthetic: boolean }) {
+function VisualCard({ sel, c, ix }: { sel: any; c: CaseData; ix: Index }) {
   const v = ix.visuals.get(sel.visual_id)
   const [size, setSize] = useState<{ w: number; h: number } | null>(null)
   const [failed, setFailed] = useState(false)
-  const [all, setAll] = useState(false)
   const src = v ? c.url(v.asset_uri) : null
-  const shown = (v?.annotations || []).filter((a: any) => all || (sel.annotation_ids || []).includes(a.id))
-  const pts = (a: any) => {
-    const xs: number[] = a.coordinates_or_bbox || [], norm = xs.every((n) => n >= 0 && n <= 1)
-    return xs.map((n, i) => (norm && size ? n * (i % 2 ? size.h : size.w) : n))
-  }
-  const style = (p: string) => (p === "geospatial_geometry" ? { stroke: "#d62828", dash: "" } : p === "vision_candidate" ? { stroke: "#f08c00", dash: "8 6" } : p === "human_annotation" ? { stroke: "#1f6feb", dash: "" } : { stroke: "#868e96", dash: "" })
+  const shown = (v?.annotations || []).filter((a: any) => (sel.annotation_ids || []).includes(a.id))
+  const pts = (a: any) => { const xs: number[] = a.coordinates_or_bbox || [], norm = xs.every((n) => n >= 0 && n <= 1); return xs.map((n, i) => (norm && size ? n * (i % 2 ? size.h : size.w) : n)) }
+  const stroke = (p: string) => (p === "geospatial_geometry" ? ["#d62828", ""] : p === "vision_candidate" ? ["#f08c00", "8 6"] : p === "human_annotation" ? ["#1f6feb", ""] : ["#868e96", ""])
+  const srcs = v ? (v.source_ids || []).map((id: string) => ix.sources.get(id)?.provider || id).join(", ") : ""
   return (
-    <article className="db-card db-visual">
-      <div className="db-card-h"><b>{sel.title}</b>{synthetic && <span className="db-tag synth">Synthetic</span>}</div>
-      <div className="db-img">
-        {!v || !src || failed ? <div className="db-noimg">Image not available <code>{sel.visual_id}</code></div> : <>
+    <figure className="jr-fig">
+      <div className="jr-img">
+        {!v || !src || failed ? <div className="jr-noimg">Image not available ({sel.visual_id})</div> : <>
           <img src={src} alt={v.alt_text || sel.title} onLoad={(e) => setSize({ w: e.currentTarget.naturalWidth, h: e.currentTarget.naturalHeight })} onError={() => setFailed(true)} />
           {size && <svg viewBox={`0 0 ${size.w} ${size.h}`} preserveAspectRatio="none" aria-hidden="true">
             {shown.map((a: any) => {
-              const p = pts(a), s = style(a.provenance), sw = Math.max(2, size.w / 250), num = a.id.split(".").pop()?.replace(/^\D+/, "")
-              const [x0, y0] = [p[0] ?? 0, p[1] ?? 0]
-              return (
-                <g key={a.id} fill="none" stroke={s.stroke} strokeWidth={sw} strokeDasharray={s.dash}>
-                  {a.geometry_type === "bounding_box" ? <rect x={p[0]} y={p[1]} width={p[2] - p[0]} height={p[3] - p[1]} />
-                    : a.geometry_type === "point" ? <circle cx={x0} cy={y0} r={sw * 4} />
-                    : a.geometry_type === "line" ? <polyline points={p.join(" ")} />
-                    : <polygon points={p.join(" ")} />}
-                  <g transform={`translate(${x0},${y0})`}><circle r={sw * 6} fill={s.stroke} stroke="#fff" strokeWidth={sw / 2} /><text textAnchor="middle" dominantBaseline="central" fill="#fff" stroke="none" fontSize={sw * 6} fontWeight={700}>{num}</text></g>
-                </g>
-              )
+              const p = pts(a), [col, dash] = stroke(a.provenance), sw = Math.max(2, size.w / 250)
+              return <g key={a.id} fill="none" stroke={col} strokeWidth={sw} strokeDasharray={dash}>
+                {a.geometry_type === "bounding_box" ? <rect x={p[0]} y={p[1]} width={p[2] - p[0]} height={p[3] - p[1]} /> : a.geometry_type === "point" ? <circle cx={p[0]} cy={p[1]} r={sw * 4} /> : a.geometry_type === "line" ? <polyline points={p.join(" ")} /> : <polygon points={p.join(" ")} />}
+              </g>
             })}
           </svg>}
         </>}
       </div>
-      <div className="db-card-b">
-        <p>{sel.caption}</p>
-        <p className="db-muted">{sel.underwriting_relevance}</p>
-        {(v?.annotations || []).length > 0 && <ul className="db-legend">{(all ? v.annotations : shown).map((a: any) => <li key={a.id}><code>{a.id.split(".").pop()}</code> {a.label} <span className="db-muted">· {a.provenance === "vision_candidate" ? "AI candidate, to verify" : humanise(a.provenance)} · {a.confidence}</span></li>)}</ul>}
-        {(v?.annotations || []).length > (sel.annotation_ids || []).length && <button type="button" className="db-link" onClick={() => setAll(!all)}>{all ? "Show selected annotations" : "Show all annotations"}</button>}
-        <Chips ids={sel.fact_ids || []} ix={ix} />
-        {v && <p className="db-attr">{(v.source_ids || []).map((id: string) => { const s = ix.sources.get(id); return s ? `${s.provider}${s.usage_or_attribution ? " — " + s.usage_or_attribution : ""}` : id }).join(" · ")} · {v.captured_or_published_at || "date unknown"} · {v.building_egid ? `building EGID ${v.building_egid}` : "not linked to the insured building"}</p>}
-      </div>
-    </article>
+      <figcaption>
+        <b>{sel.title}</b>
+        <span>{sel.caption}</span>
+        {shown.length > 0 && <span className="jr-muted">{shown.map((a: any) => `${a.label}${a.provenance === "vision_candidate" ? " (AI candidate, to verify)" : ""}`).join(" · ")}</span>}
+        <span className="jr-muted small">{srcs} · {v?.captured_or_published_at || "date unknown"}{v && !v.building_egid ? " · not linked to the insured building" : ""}</span>
+      </figcaption>
+    </figure>
   )
 }
 
-/* §3.6 */
 function Valuation({ r, ix }: { r: any; ix: Index }) {
   const vc = r.valuation_commentary || {}, f = ix.byKey.get("reconstruction_value_chf")
   return (
-    <div className="db-grid2 even">
-      <div className="db-card">
-        <div className="db-card-h"><b>Reconstruction value</b></div>
-        <div className="db-card-b">
-          <p className="db-big">{f ? (isRange(f.value) ? fmtRange(f.value) : <Value v={f.value} unit={f.unit} k={f.field_key} />) : <span className="db-unknown">Unknown</span>} {f && <StatusBadge f={f} />}</p>
-          {f?.method && <p className="db-small">{f.method}</p>}
-          <p className="db-note">Indicative range, not an appraisal.</p>
-          <p>{vc.reconstruction_value_comment}</p>
-          <h4>Market value</h4><p>{vc.market_value_comment}</p>
-          <Chips ids={vc.fact_ids || []} ix={ix} />
-        </div>
-      </div>
-      <div className="db-card">
-        <div className="db-card-h"><b>Missing valuation inputs</b></div>
-        <div className="db-card-b">{(vc.missing_valuation_inputs || []).length ? <ul>{vc.missing_valuation_inputs.map((x: string, k: number) => <li key={k}>{x}</li>)}</ul> : <p className="db-muted">None listed.</p>}</div>
-      </div>
-    </div>
+    <dl className="jr-kv wide">
+      <div><dt>Reconstruction value</dt><dd><b>{f ? (isRange(f.value) ? fmtRange(f.value) : <Value v={f.value} unit={f.unit} k={f.field_key} />) : <span className="jr-unknown">Unknown</span>}</b> {f && <StatusBadge f={f} />}<div className="jr-sub">Indicative range, not an appraisal.{f?.method ? ` ${f.method}` : ""}</div></dd></div>
+      <div><dt>Comment</dt><dd>{vc.reconstruction_value_comment}</dd></div>
+      <div><dt>Market value</dt><dd>{vc.market_value_comment}</dd></div>
+      {(vc.missing_valuation_inputs || []).length > 0 && <div><dt>Missing inputs</dt><dd><ul className="jr-list tight">{vc.missing_valuation_inputs.map((x: string, k: number) => <li key={k}>{x}</li>)}</ul></dd></div>}
+    </dl>
   )
 }
 
-/* §3.7 */
-function Questions({ r, ix }: { r: any; ix: Index }) {
-  const qs = [...(r.open_questions || [])].sort((a, b) => Number(!!b.blocking_initial_pricing) - Number(!!a.blocking_initial_pricing) || (PRIORITY_ORDER[a.priority] ?? 9) - (PRIORITY_ORDER[b.priority] ?? 9))
+/* ---------------- small parts ---------------- */
+function StatusMenu({ s, onChange, big }: { s: Status; onChange: (s: Status) => void; big?: boolean }) {
+  const [open, setOpen] = useState(false)
+  const ref = useDismiss(open, () => setOpen(false))
+  if (s === "generating" || s === "failed") return <span className={"jr-loz tone-" + STATUS_TONE[s] + (big ? " big" : "")}>{STATUS_LABEL[s]}</span>
   return (
-    <div className="db-stack">
-      {r.underwriter_next_step && <div className="db-card db-next"><div className="db-card-h">Next step for the underwriter</div><div className="db-card-b">{r.underwriter_next_step}</div></div>}
-      <div className="db-card db-tablewrap">
-        <table className="db-table static">
-          <thead><tr><th>Priority</th><th>Question</th><th>Why</th><th>Recipient</th><th>Expected document</th><th>Blocking</th><th>Features</th><th>Findings</th></tr></thead>
-          <tbody>{qs.map((q) => (
-            <tr key={q.id}>
-              <td><Pill kind={q.priority === "critical" ? "red" : q.priority === "high" ? "orange" : q.priority === "medium" ? "amber" : "grey"}>{q.priority}</Pill></td>
-              <td><b>{q.question}</b> <span className="db-muted">{q.id}</span></td>
-              <td>{q.reason_for_underwriter}</td><td>{TARGET[q.target] || q.target}</td><td>{q.expected_answer_or_document}</td>
-              <td>{q.blocking_initial_pricing ? <b className="db-warn">Yes</b> : "No"}</td>
-              <td><Chips ids={q.feature_ids || []} ix={ix} /></td>
-              <td>{(q.trigger_finding_ids || []).map((id: string) => <a key={id} className="db-findlink" href={"#finding-" + id}>{id}</a>)}</td>
-            </tr>
-          ))}</tbody>
-        </table>
-      </div>
-    </div>
+    <span className="jr-statusmenu" ref={ref as React.RefObject<HTMLSpanElement>}>
+      <button type="button" className={"jr-loz tone-" + STATUS_TONE[s] + (big ? " big" : "") + " btn"} aria-expanded={open} onClick={(e) => { e.stopPropagation(); setOpen(!open) }}>
+        {STATUS_LABEL[s]}<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9l6 6 6-6" /></svg>
+      </button>
+      {open && <span className="jr-menu">{WORKFLOW.filter((x) => x !== s).map((x) => (
+        <button key={x} type="button" onClick={() => { setOpen(false); onChange(x) }}><span className={"jr-loz tone-" + STATUS_TONE[x]}>{STATUS_LABEL[x]}</span></button>
+      ))}</span>}
+    </span>
   )
 }
-
-/* §3.8 */
-function Export({ c }: { c: CaseData }) {
-  const dl = (obj: unknown, name: string) => { const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([JSON.stringify(obj, null, 2)], { type: "application/json" })); a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000) }
-  const id = c.output?.case_id || c.id
+function Assignee({ value, onChange }: { value?: string; onChange: (v: string | undefined) => void }) {
   return (
-    <div className="db-card"><div className="db-card-b db-stack">
-      <p>Print or save as PDF: every tab is printed in order (the synthetic banner is kept).</p>
-      <div className="db-row">
-        <button type="button" className="db-btn" onClick={() => print()}>Print / PDF</button>
-        {c.output && <button type="button" className="db-btn ghost" onClick={() => dl(c.output, `${id}.output.json`)}>Download output.json</button>}
-        {c.bundle && <button type="button" className="db-btn ghost" onClick={() => dl(c.bundle, `${id}.features_combined.json`)}>Download features_combined.json</button>}
-      </div>
-      <p className="db-muted">metrics.json and output.invalid.json are internal and never exported.</p>
-      {c.metrics && <details className="db-run"><summary>Internal run details</summary>
-        <p>Model {c.metrics.model_config || "?"} · {c.metrics.duration_s ?? "?"} s · tokens in {c.metrics.llm?.input_tokens ?? "?"} / out {c.metrics.llm?.output_tokens ?? "?"} · USD {c.metrics.total_usd ?? "?"}</p>
-        <ul>{(c.metrics.stages || []).map((s: any, k: number) => <li key={k}><code>{s.stage}</code> {s.status} {s.detail ? "· " + s.detail : ""}</li>)}</ul>
-      </details>}
-    </div></div>
+    <label className="jr-assignee">
+      <span className={"jr-avatar" + (value === "me" ? " me" : "")} aria-hidden="true">{value === "me" ? "Me" : <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="8" r="4" /><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7z" /></svg>}</span>
+      <select value={value || ""} onChange={(e) => onChange(e.target.value || undefined)} aria-label="Assignee">
+        <option value="">Unassigned</option><option value="me">Me</option>
+      </select>
+    </label>
   )
 }
+function Priority({ p, iconOnly }: { p: string; iconOnly?: boolean }) {
+  const col = p === "critical" ? "#c9372c" : p === "high" ? "#e2483d" : p === "medium" ? "#d97008" : "#2684ff"
+  const path = p === "critical" ? "M6 13l6-6 6 6M6 19l6-6 6 6" : p === "high" ? "M6 15l6-6 6 6" : p === "medium" ? "M5 9h14M5 15h14" : "M6 9l6 6 6-6"
+  return <span className="jr-prio" title={humanise(p)}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={col} strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><path d={path} /></svg>{!iconOnly && humanise(p)}</span>
+}
+function TypeIcon() { return <svg className="jr-typeicon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round"><path d="M3 21V8l6-4v17M9 21V10l12 3v8M3 21h18M13 15h4M13 18h4" /></svg> }
 
-/* ---------------- §4 chips, values, badges ---------------- */
 function Chips({ ids, ix }: { ids?: string[]; ix: Index }) {
   if (!ids?.length) return null
-  return <div className="db-chips">{[...new Set(ids)].map((id) => <Chip key={id} id={id} ix={ix} />)}</div>
+  return <div className="jr-chips">{[...new Set(ids)].map((id) => <Chip key={id} id={id} ix={ix} />)}</div>
 }
 function Chip({ id, ix }: { id: string; ix: Index }) {
   const [open, setOpen] = useState(false)
+  const ref = useDismiss(open, () => setOpen(false))
   const res = resolve(ix, id)
-  if (res.kind === "unresolved") return <span className="db-chip s-off" title="Not found in the evidence register">{id} · unresolved</span>
-  if (res.kind === "source") { const s = res.item; return s.url ? <a className="db-chip s-src" href={s.url} target="_blank" rel="noreferrer" title={s.title}>{id}</a> : <span className="db-chip s-src" title={`${s.provider} — ${s.title}`}>{id}</span> }
-  if (res.kind === "visual" || res.kind === "annotation") return <span className="db-chip s-src" title={res.item.label || res.item.alt_text}>{res.kind === "visual" ? "Image" : "Annotation"} {id.split(".").pop()}</span>
+  if (res.kind === "unresolved") return <span className="jr-chip s-off" title="Not found in the evidence register">{id}: unresolved</span>
+  if (res.kind === "source") { const s = res.item; return s.url ? <a className="jr-chip s-src" href={s.url} target="_blank" rel="noreferrer" title={s.title}>{s.provider}</a> : <span className="jr-chip s-src" title={s.title}>{s.provider}</span> }
+  if (res.kind === "visual" || res.kind === "annotation") return <span className="jr-chip s-src">{res.kind === "visual" ? "Image" : "Annotation"}</span>
   const f = res.item, [lab, cls] = STATUS[f.evidence_status] || [f.evidence_status, "grey"]
   return (
-    <span className="db-chipwrap">
-      <button type="button" className={"db-chip s-" + cls} aria-expanded={open} onClick={() => setOpen(!open)} title={lab}>{humanise(f.field_key)}</button>
-      {open && <span className="db-pop" role="dialog">
-        <b>{humanise(f.field_key)}</b> <code>{f.id}</code>
-        <span className="db-pop-v"><Value v={f.value} unit={f.unit} k={f.field_key} long /></span>
-        <span className="db-muted">{lab} · {scopeLabel(f.site_scope)} · confidence {f.confidence}</span>
-        {f.method && <span className="db-small">{f.method}</span>}
+    <span className="jr-chipwrap" ref={ref as React.RefObject<HTMLSpanElement>}>
+      <button type="button" className={"jr-chip s-" + cls} aria-expanded={open} onClick={() => setOpen(!open)} title={lab}>{humanise(f.field_key)}</button>
+      {open && <span className="jr-pop" role="dialog">
+        <b>{humanise(f.field_key)}</b>
+        <span><Value v={f.value} unit={f.unit} k={f.field_key} long /></span>
+        <span className="jr-muted">{lab} · {scopeLabel(f.site_scope)} · {f.confidence}</span>
         {(f.source_ids || []).length > 0 && <span>{f.source_ids.map((s: string) => { const so = ix.sources.get(s); return so?.url ? <a key={s} href={so.url} target="_blank" rel="noreferrer">{so.provider} </a> : <span key={s}>{so?.provider || s} </span> })}</span>}
       </span>}
     </span>
   )
 }
-function StatusBadge({ f }: { f: any }) { const [lab, cls] = STATUS[f.evidence_status] || [f.evidence_status, "grey"]; return <span className={"db-chip s-" + cls + " static"}>{cls === "conflict" ? "⚠ " : ""}{lab}</span> }
+function StatusBadge({ f }: { f: any }) { const [lab, cls] = STATUS[f.evidence_status] || [f.evidence_status, "grey"]; return <span className={"jr-chip static s-" + cls}>{lab.split(" — ")[0].split(" (")[0]}</span> }
 function Value({ v, unit, k, long }: { v: any; unit?: string | null; k: string; long?: boolean }): JSX.Element {
-  const s = fmtInline(v, unit)
-  if (s !== null) return v === null || v === undefined ? <span className="db-unknown">Unknown</span> : <>{s}</>
-  if (Array.isArray(v)) return <ul className="db-list">{v.map((x, i) => <li key={i}><Value v={x} k={k} /></li>)}</ul>
+  const s = fmtInline(v, unit) ?? fmtHazard(k, v)
+  if (s !== null) return v === null || v === undefined ? <span className="jr-unknown">Unknown</span> : <>{s}</>
+  if (Array.isArray(v)) return <ul className="jr-list tight">{v.map((x, i) => <li key={i}><Value v={x} k={k} /></li>)}</ul>
   const entries = Object.entries(v)
-  const body = <dl className="db-kv small">{entries.map(([kk, x]) => <div key={kk}><dt>{humanise(kk)}</dt><dd>{typeof x === "object" && x !== null ? <Value v={x} k={kk} /> : String(fmtShare(kk, x) ?? "Unknown")}</dd></div>)}</dl>
+  const body = <dl className="jr-kv small">{entries.map(([kk, x]) => <div key={kk}><dt>{humanise(kk)}</dt><dd>{typeof x === "object" && x !== null ? <Value v={x} k={kk} /> : String(fmtShare(kk, x) ?? "Unknown")}</dd></div>)}</dl>
   return long && (k.startsWith("ev.") || entries.length > 4) ? <details><summary>{entries.length} fields</summary>{body}</details> : body
 }
-function Pill({ kind, children, big }: { kind: string; children: ReactNode; big?: boolean }) { return <span className={"db-pill k-" + kind + (big ? " big" : "")}>{children}</span> }
+/** long text shown on 3 lines, with "Show more" */
+function Clamp({ text }: { text?: string }) {
+  const [open, setOpen] = useState(false)
+  if (!text) return null
+  return <div className="jr-clampwrap"><p className={"jr-text" + (open ? "" : " jr-clamp")}>{text}</p>{text.length > 260 && <button type="button" className="jr-more-btn no-print" onClick={() => setOpen(!open)}>{open ? "Show less" : "Show more"}</button>}</div>
+}
+/** what the icons mean (findings and questions) */
+function PriorityLegend({ extra }: { extra?: boolean }) {
+  return (
+    <div className="jr-legend" aria-label="Legend">
+      {(["critical", "high", "medium", "low"] as const).map((p) => <Priority key={p} p={p} />)}
+      {extra && <><span className="jr-legend-sep" /><span className="jr-legend-i"><span className="jr-box-ic" aria-hidden="true" />Answered</span><span className="jr-legend-i"><span className="jr-loz tone-red small">Blocking</span>blocks initial pricing</span></>}
+    </div>
+  )
+}
+/** address -> Google Maps in a new tab */
+function MapLink({ address }: { address: string }) {
+  return (
+    <a className="jr-maplink" href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`} target="_blank" rel="noreferrer" title="Open in Google Maps">
+      {address}<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5" /></svg>
+    </a>
+  )
+}
