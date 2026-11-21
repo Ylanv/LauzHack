@@ -9,6 +9,7 @@ Inputs: client_name, company_legal_name (exact, Zefix), address (Geneva), indust
 GET  /                                → simple frontend (form + result)
 POST /api/llm-input                    → llm_input.json (photos embedded as base64, for the report)
 POST /api/llm-input?for_llm=true       → same JSON without the photos (what the final-report LLM receives)
+                                         (repeated requests are served from the request cache; ?refresh=true forces new calls)
 GET  /api/industries                   → drop-down values for industry_type
 GET  /api/health                       → configuration check
 """
@@ -20,7 +21,7 @@ from typing import Literal
 # Make `src.*` imports work whatever the working directory (local or Vercel).
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from fastapi import FastAPI, Header, HTTPException  # noqa: E402
+from fastapi import FastAPI, Header, HTTPException, Response  # noqa: E402
 from fastapi.responses import HTMLResponse  # noqa: E402
 from pydantic import BaseModel, Field  # noqa: E402
 
@@ -66,14 +67,17 @@ def industries() -> list[dict]:
 
 
 @app.post("/api/llm-input")
-def create_llm_input(req: LlmInputRequest, for_llm: bool = False,
+def create_llm_input(req: LlmInputRequest, response: Response, for_llm: bool = False, refresh: bool = False,
                      x_access_code: str | None = Header(None)) -> dict:
     # The API spends OpenRouter + Google credits: on a public URL, require the team's access code.
     if config.ACCESS_CODE and x_access_code != config.ACCESS_CODE:
         raise HTTPException(401, "Invalid or missing access code (X-Access-Code header).")
-    from src.pipeline import InputError, ServiceError, for_llm_text, run
+    from src.pipeline import InputError, ServiceError, for_llm_text, run_cached
     try:
-        doc = run(req.client_name, req.company_legal_name, req.address, req.industry_type, req.website)
+        # Same company + address + industry as a previous request → cached result, no external API call.
+        doc, hit = run_cached(req.client_name, req.company_legal_name, req.address, req.industry_type, req.website,
+                              refresh=refresh)
+        response.headers["X-Cache"] = "HIT" if hit else "MISS"
     except InputError as e:  # not found / ambiguous / out of scope → user error
         raise HTTPException(422, str(e)) from e
     except ServiceError as e:  # public data service down / timeout → retry

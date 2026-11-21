@@ -152,7 +152,8 @@ function render(d, secs) {
   $("r-stats").innerHTML = [
     [`${cov.all.filled}/${cov.all.total}`, "features trouvées"], [`${cov.P0.filled}/${cov.P0.total}`, "P0 automatiques"],
     [`${cov.P1.filled}/${cov.P1.total}`, "P1 IA / multimodal"], [Object.keys(d.images).length, "photos"],
-    [`CHF ${m.cost_chf.toFixed(4)}`, `${m.tool_calls.length} appel(s) vision`], [`${secs.toFixed(0)} s`, "durée totale"],
+    m.request_cache?.hit ? ["cache", `déjà analysé le ${m.request_cache.cached_at.slice(0, 10)} · 0 appel API`]
+                         : [`CHF ${m.cost_chf.toFixed(4)}`, `${m.tool_calls.length} appel(s) vision`], [`${secs.toFixed(0)} s`, "durée totale"],
   ].map(([b, s]) => `<div class="stat"><b>${esc(b)}</b><span>${esc(s)}</span></div>`).join("");
   const risk = id.bankruptcy_risk_signals || {};
   $("r-ident").innerHTML = [

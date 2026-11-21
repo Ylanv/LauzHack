@@ -231,3 +231,46 @@ def save(llm_input: dict, out_dir, with_image_files: bool = True) -> None:
     if with_image_files:
         for name, img in llm_input.get("images", {}).items():
             (out / name).write_bytes(base64.b64decode(img["data_url"].split(",", 1)[1]))
+
+
+# ---------------------------------------------------------------- request cache
+# Same company + address + industry (+ website, vision on/off) → reuse the stored llm_input.json: no public-data,
+# Google or vision call. Shared backend: Upstash Redis when configured (persistent), else file cache
+# (.cache/ locally, /tmp on Vercel = per warm instance only). The client name is never stored or used in the key.
+# Degraded results (a block in error, e.g. a 429) are not cached, so a retry can still get the full evidence.
+REQUEST_CACHE_VERSION = 1  # bump when the pipeline output changes, to invalidate old entries
+REQUEST_CACHE_TTL_S = int(__import__("os").environ.get("REQUEST_CACHE_TTL_S", str(7 * 24 * 3600)))
+
+
+def _norm(s: str | None) -> str:
+    return re.sub(r"\s+", " ", (s or "").strip().lower().replace(",", " "))
+
+
+def request_cache_key(company: str, address: str, industry_type: str | None, website: str | None, use_llm: bool) -> str:
+    from src.cache import make_key
+    return make_key("llm_input", {"v": REQUEST_CACHE_VERSION, "company": _norm(company), "address": _norm(address),
+                                  "industry": industry_type or None, "website": _norm(website) or None, "vision": use_llm})
+
+
+def run_cached(client_name: str, company: str, address: str, industry_type: str | None = None, website: str | None = None,
+               use_llm: bool = True, refresh: bool = False) -> tuple[dict, bool]:
+    """run() behind the request cache. Returns (llm_input, cache_hit). refresh=True forces new API calls."""
+    from src.cache import cache
+    key = request_cache_key(company, address, industry_type, website, use_llm)
+    if not refresh:
+        hit = cache.get(key)
+        if hit and time.time() - hit.get("cached_at", 0) < REQUEST_CACHE_TTL_S:
+            doc = hit["doc"]
+            doc["request"]["client_name"] = client_name
+            m = doc["metrics"]
+            m["request_cache"] = {"hit": True, "cached_at": datetime.fromtimestamp(hit["cached_at"], timezone.utc).isoformat(timespec="seconds"),
+                                  "original_cost_usd": m.get("cost_usd"), "original_duration_ms": m.get("duration_ms")}
+            m.update(cost_usd=0.0, cost_chf=0.0, cost_source="request_cache")
+            return doc, True
+    doc = run(client_name, company, address, industry_type, website, use_llm=use_llm)
+    if all((b or {}).get("status") != "error" for b in doc.get("evidence", {}).values()):
+        stored = copy.deepcopy(doc)
+        stored["request"]["client_name"] = None
+        cache.set(key, {"cached_at": time.time(), "doc": stored})
+    doc["metrics"]["request_cache"] = {"hit": False}
+    return doc, False

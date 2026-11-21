@@ -84,10 +84,10 @@ def run(doc: dict, out: Path, model: str | None = None, max_usd: float | None = 
             errs = contracts.errors("INPUT", doc)
             if errs:
                 raise PipelineError("input", "; ".join(errs[:5]))
-            from src.pipeline import InputError, ServiceError, run as etl_run
+            from src.pipeline import InputError, ServiceError, run_cached
             try:
-                v2 = etl_run(doc["client_name"], doc["company_legal_name"], doc["building_address"],
-                             doc.get("industry_type"), doc.get("website"), use_llm=use_vision)
+                v2, etl_cache_hit = run_cached(doc["client_name"], doc["company_legal_name"], doc["building_address"],
+                                               doc.get("industry_type"), doc.get("website"), use_llm=use_vision)
             except InputError as ex:
                 raise PipelineError("etl", f"input rejected: {ex}") from ex
             except ServiceError as ex:
@@ -101,7 +101,8 @@ def run(doc: dict, out: Path, model: str | None = None, max_usd: float | None = 
             met["etl"] = {"vision_calls": len(m.get("tool_calls", [])), "tokens_input": m.get("tokens_input"),
                           "tokens_output": m.get("tokens_output"), "reasoning_tokens": m.get("reasoning_tokens"),
                           "usd": m.get("cost_usd"), "usd_source": m.get("cost_source"),
-                          "external_calls": m.get("external_calls"), "duration_ms": m.get("duration_ms")}
+                          "external_calls": m.get("external_calls"), "duration_ms": m.get("duration_ms"),
+                          "request_cache_hit": etl_cache_hit}
             stage("etl", "warning" if failed else "ok", t, evidence_blocks=blocks,
                   detail=f"degraded sources: {', '.join(failed)}" if failed else "all evidence blocks ok")
         elif kind == "FEATURE_DOC":
