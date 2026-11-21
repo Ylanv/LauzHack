@@ -41,6 +41,9 @@ MODEL_PRICES_CHF_PER_MTOK: dict[str, tuple[float, float]] = {
 # --- Street-level facade photo (Google Street View Static API, demo) ---
 GOOGLE_MAPS_API_KEY = os.environ.get("GOOGLE_MAPS_API_KEY", "")
 
+# --- Access code required by POST /api/llm-input when set (public deployments spend API credits) ---
+ACCESS_CODE = os.environ.get("ACCESS_CODE", "")
+
 # --- Cache ---
 # Prod (Vercel) : Upstash Redis via REST (Marketplace) si configuré.
 # Sinon : fichiers dans .cache/ en local, /tmp sur Vercel (éphémère, best effort).

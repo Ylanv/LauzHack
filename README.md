@@ -166,6 +166,9 @@ schemas/llm_input.schema.json  contrat de sortie
 
 ## Hébergement
 
+**En ligne : https://axa-smart-property.vercel.app** — page de démo (formulaire → features, photos, JSON pour le LLM). L'API demande le **code d'accès** de l'équipe (header `X-Access-Code`, champ « Code d'accès » de la page) car elle consomme les crédits OpenRouter et Google ; le code est dans la variable Vercel `ACCESS_CODE`.
+
+
 - **Modèles** : OpenRouter (clé AXA). Vision + extraction : `google/gemini-2.5-flash-lite` (≈ CHF 0.0005 par bâtiment).
 - **Vercel** : FastAPI = une fonction Python ; pas d'écriture disque hors `/tmp` ; cache LLM via Upstash Redis si configuré ; 13–60 s par bâtiment (< 300 s).
 

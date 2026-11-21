@@ -1,0 +1,10 @@
+# The Vercel CLI does not apply .gitignore: never upload secrets, local env or test output.
+.env
+.env.*
+!.env.example
+.venv/
+.cache/
+probe_out/
+__pycache__/
+*.pyc
+.vercel/
