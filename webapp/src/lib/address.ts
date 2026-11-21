@@ -11,17 +11,22 @@ const MOCK_ADDR: AddressHit[] = ([
 ] as [string, string, string, number, number][]).map(([st, zip, town, lon, lat]) => ({ text: `${st}, ${zip} ${town}`, lon, lat }))
 export const norm = (x: string) => x.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
 
-/** geo.admin.ch SearchServer first (1.2 s timeout), mock list as fallback. */
-export async function searchAddress(q: string): Promise<AddressHit[]> {
+/** Only the explicit demo flow can use the offline address list. */
+export async function searchAddress(q: string, demo: boolean): Promise<AddressHit[]> {
+  const c = new AbortController()
+  const timeout = setTimeout(() => c.abort(), demo ? 1200 : 5000)
   try {
-    const c = new AbortController()
-    const to = setTimeout(() => c.abort(), 1200)
     const r = await fetch("https://api3.geo.admin.ch/rest/services/ech/SearchServer?type=locations&origins=address&sr=4326&limit=6&searchText=" + encodeURIComponent(q), { signal: c.signal })
-    clearTimeout(to)
+    if (!r.ok) throw new Error("address search " + r.status)
     const j = await r.json()
     // labels become "Street N, NPA Town", the format the backend expects
     if (j.results?.length) return j.results.map((x: any) => ({ text: String(x.attrs.label).replace(/<[^>]+>/g, "").replace(/\s+(\d{4}\s)/, ", $1"), lon: x.attrs.lon, lat: x.attrs.lat, live: true }))
-  } catch { /* offline or blocked */ }
+  } catch (error) {
+    if (!demo) throw error
+  } finally {
+    clearTimeout(timeout)
+  }
+  if (!demo) return []
   const n = norm(q).trim()
   const a = MOCK_ADDR.filter((x) => norm(x.text).startsWith(n))
   const b = MOCK_ADDR.filter((x) => !a.includes(x) && norm(x.text).split(/[ ,]+/).some((w) => w.startsWith(n)))

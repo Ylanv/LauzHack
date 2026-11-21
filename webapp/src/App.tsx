@@ -8,11 +8,15 @@ import { MapFlight } from "./lib/mapFlight"
 import { paintBackground, paintFish } from "./lib/background"
 import { clamp, reducedMotion } from "./lib/utils"
 import { MOCK, INSIGHTS } from "./pipeline/mock"
-import { DEMO, startReport, reportStatus, progressError, AssessError } from "./pipeline"
-
-/** what the companion says while a real backend stage runs (after the simulated ETL steps) */
-const STAGE_LABEL: Record<string, string> = { features: "Putting the file together", llm: "Writing the report", validate: "Checking the report" }
+import { DEMO, getIndustries, startReport, reportStatus, progressError, AssessError, type ReportProgress } from "./pipeline"
 import type { Coords, FlightInput, RequestInput, StepId } from "./pipeline/types"
+
+const STAGE_LABEL: Record<string, string> = {
+  etl: "Collecting building and company data",
+  features: "Putting the file together",
+  llm: "Writing the report",
+  validate: "Checking the report",
+}
 
 type Screen = "form" | "proc" | "done"
 const TOTAL = Math.max(...MOCK.steps.map((s) => s.start + s.dur))
@@ -32,6 +36,7 @@ function flightInput(tv: number): FlightInput {
 export default function App() {
   const [screen, setScreen] = useState<Screen>("form")
   const [input, setInput] = useState<RequestInput | null>(null)
+  const [activity, setActivity] = useState("")
   const [formInit, setFormInit] = useState<{ input: RequestInput; coords: Coords; picked: string } | null>(null)
   const [serverError, setServerError] = useState<ServerError | null>(null)
   const [formKey, setFormKey] = useState(0)
@@ -40,6 +45,7 @@ export default function App() {
   const [live, setLive] = useState("")
   const [stepState, setStepState] = useState<Record<string, string>>({})
   const [current, setCurrent] = useState("Starting")
+  const [progress, setProgress] = useState<ReportProgress | null>(null)
   const [fade, setFade] = useState(false)
   const [skipped, setSkipped] = useState(reducedMotion())
   const qp = new URLSearchParams(location.search)
@@ -75,12 +81,13 @@ export default function App() {
     setTimeout(() => { setFade(true); setTimeout(finish, 650) }, 900)
   }, [finish])
 
-  const start = (i: RequestInput, c: Coords, accessCode = "") => {
+  const start = (i: RequestInput, c: Coords, accessCode: string, activityLabel: string) => {
     coords.current = c; setServerError(null)
     setInput(i); setScreen("proc"); setMood("working"); setStepState({}); setCurrent("Starting"); setFade(false); setHeld(false); setJob(null)
+    setActivity(activityLabel); setProgress(null)
     ;MapFlight.reset(); MapFlight.update({ step: "identity", progress: 0, coords: c })
     setLive("Preparing your file")
-    const r = run.current = { tv: Number(new URLSearchParams(location.search).get("at")) || 0, last: performance.now(), done: false, said: {}, ins: {}, st: {}, live: DEMO ? "ok" : "pending", stage: null as string | null, etlDone: false, err: null as AssessError | null, input: i, coords: c }
+    const r = run.current = { tv: Number(new URLSearchParams(location.search).get("at")) || 0, last: performance.now(), done: false, ins: {}, st: {}, live: DEMO ? "ok" : "pending", etlDone: false, err: null as AssessError | null, input: i, coords: c }
     // live: one report job per submission (ETL → LLM report → validation); the waiting screen follows its real stages
     // and only completes once the report has been generated and stored for the team (demo flow: simulated)
     if (!DEMO) {
@@ -89,8 +96,10 @@ export default function App() {
       const poll = (id: string) => {
         if (run.current !== r) return
         reportStatus(id).then((p) => {
+          if (run.current !== r) return
           misses = 0
-          r.stage = p.stage; r.etlDone = p.done_stages.includes("etl")
+          setProgress(p)
+          r.etlDone = p.done_stages.includes("etl")
           if (p.status === "succeeded") { r.live = "ok"; setJob(id) }
           else if (p.status === "running") setTimeout(() => poll(id), 1500)
           else fail(progressError(p))
@@ -102,7 +111,19 @@ export default function App() {
   }
 
   // dev helper: /?autorun starts the demo case immediately (optionally /?autorun&at=14 to jump ahead in the sequence)
-  useEffect(() => { if (new URLSearchParams(location.search).has("autorun")) start({ ...MOCK.sample }, { ...MOCK.coords }, "") }, []) // eslint-disable-line
+  useEffect(() => {
+    if (!new URLSearchParams(location.search).has("autorun")) return
+    getIndustries().catch(() => []).then((list) => {
+      const label = list.find((x) => x.key === MOCK.sample.industry)?.label ?? MOCK.sample.industry
+      if (screenRef.current === "form" && !run.current) start({ ...MOCK.sample }, { ...MOCK.coords }, "", label)
+    })
+  }, []) // eslint-disable-line
+
+  useEffect(() => {
+    if (progress?.status === "running" && progress.stage && STAGE_LABEL[progress.stage]) {
+      setLive(STAGE_LABEL[progress.stage])
+    }
+  }, [progress?.status, progress?.stage])
 
   // single animation loop: pipeline simulation + globe on the waiting screen, background otherwise
   useEffect(() => {
@@ -124,20 +145,21 @@ export default function App() {
           const cap = r.live === "ok" ? TOTAL : r.etlDone ? STEP("file").start + STEP("file").dur * 0.6 : STEP("file").start - 0.3
           const hold = (() => { const h = location.search.match(/hold=?([\d.]*)/); return h ? (h[1] ? +h[1] : 15) : TOTAL })()
           r.tv = Math.min(hold, cap, r.tv + clamp((now - r.last) / 1000, 0, 0.25) * (r.live === "ok" && !DEMO ? 2.5 : 1)); r.last = now
-          let changed = false
-          MOCK.steps.forEach((s) => {
-            const st = r.tv < s.start ? "wait" : r.tv < s.start + s.dur ? "run" : "done"
-            if (r.st[s.id] !== st) {
-              r.st[s.id] = st; changed = true
-              if (st === "run") r.said[s.id] = 1
-              if (st === "done") setLive(s.label + " done")
+          if (DEMO) {
+            let changed = false
+            for (const s of MOCK.steps) {
+              const st = r.tv < s.start ? "wait" : r.tv < s.start + s.dur ? "run" : "done"
+              if (r.st[s.id] !== st) {
+                r.st[s.id] = st; changed = true
+                if (st === "done") setLive(s.label + " done")
+              }
             }
-          })
-          if (changed) setStepState({ ...r.st })
-          INSIGHTS.forEach((d) => { if (!r.ins[d.id] && prog(d.at[0], r.tv) >= d.at[1]) { r.ins[d.id] = 1; MapFlight.pushInsight(d) } })
+            if (changed) setStepState({ ...r.st })
+            INSIGHTS.forEach((d) => { if (!r.ins[d.id] && prog(d.at[0], r.tv) >= d.at[1]) { r.ins[d.id] = 1; MapFlight.pushInsight(d) } })
+            const cur = MOCK.steps.filter((s) => r.tv >= s.start && r.tv < s.start + s.dur).pop()
+            setCurrent(cur ? cur.label : "Finishing")
+          }
           MapFlight.update({ ...flightInput(r.tv), coords: coords.current })
-          const cur = MOCK.steps.filter((s) => r.tv >= s.start && r.tv < s.start + s.dur).pop()
-          setCurrent(!DEMO && r.live !== "ok" && r.etlDone && r.stage && STAGE_LABEL[r.stage] ? STAGE_LABEL[r.stage] : cur ? cur.label : "Finishing")
           if (r.tv >= TOTAL) {
             r.done = true
             if (pauseRef.current) setHeld(true); else complete()
@@ -151,8 +173,12 @@ export default function App() {
     return () => cancelAnimationFrame(raf)
   }, [say, finish, complete])
 
-  // the companion narrates the pipeline: last finished steps, then the one running now
-  const status = screen === "proc" ? { done: MOCK.steps.filter((s) => stepState[s.id] === "done").map((s) => s.label).slice(-2), now: held ? "File complete" : current, complete: held } : null
+  const doneSteps = DEMO
+    ? MOCK.steps.filter((s) => stepState[s.id] === "done").map((s) => s.label)
+    : (progress?.done_stages ?? []).map((stage) => STAGE_LABEL[stage]).filter(Boolean)
+  const runningStep = DEMO ? current : STAGE_LABEL[progress?.stage ?? ""] ?? "Starting"
+  const completeReport = held || progress?.status === "succeeded"
+  const status = screen === "proc" ? { done: doneSteps.slice(-2), now: completeReport ? "File complete" : runningStep, complete: completeReport } : null
   const skip = () => { MapFlight.setStatic(true); setSkipped(true) }
   const again = () => { setFormInit(null); setServerError(null); setFormKey((k) => k + 1); setScreen("form"); setMood("idle") }
 
@@ -168,7 +194,7 @@ export default function App() {
         </header>
         <main>
           {screen === "form" && <FormScreen key={formKey} onSubmit={start} say={say} initial={formInit} serverError={serverError} />}
-          {screen === "done" && input && <DoneScreen input={input} onAgain={again} />}
+          {screen === "done" && input && <DoneScreen input={input} activity={activity} onAgain={again} />}
         </main>
       </div>
       <Flight hidden={screen !== "proc"} fade={fade} skipped={skipped} onSkip={skip}>

@@ -15,9 +15,11 @@ GET  /api/industries                   → drop-down values for industry_type
 GET  /api/health                       → configuration check
 """
 
+import logging
 import sys
 from pathlib import Path
 from typing import Literal
+from uuid import uuid4
 
 # Make `src.*` imports work whatever the working directory (local or Vercel).
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -102,16 +104,26 @@ def start_report(req: LlmInputRequest, x_access_code: str | None = Header(None))
     if config.ACCESS_CODE and x_access_code != config.ACCESS_CODE:
         raise HTTPException(401, "Invalid or missing access code (X-Access-Code header).")
     from src.report import pipeline as report_pipeline
-    slug = _re.sub(r"[^a-z0-9]+", "-", req.company_legal_name.lower()).strip("-")[:40] or "case"
-    job_id = f"{slug}-{_time.strftime('%Y%m%d-%H%M%S')}"
+    slug = _re.sub(r"[^a-z0-9]+", "-", req.company_legal_name.lower()).strip("-")[:35] or "case"
+    job_id = f"{slug}-{_time.strftime('%Y%m%d-%H%M%S')}-{uuid4().hex[:12]}"
     out = REPORTS_DIR / job_id
-    out.mkdir(parents=True, exist_ok=True)
+    out.mkdir(parents=True)
     (out / "metrics.json").write_text(_json.dumps({"status": "running", "stages": []}), encoding="utf-8")
     doc = {"schema_version": "1.0-customer-request", "case_id": job_id, "client_name": req.client_name,
            "company_legal_name": req.company_legal_name, "building_address": req.address,
            "industry_type": req.industry_type, "website": req.website}
     _JOBS[job_id] = out
-    threading.Thread(target=report_pipeline.run, args=(doc, out), daemon=True).start()
+    def run_job() -> None:
+        try:
+            report_pipeline.run(doc, out)
+        except Exception:
+            logging.getLogger(__name__).exception("Report job %s failed", job_id)
+            (out / "metrics.json").write_text(
+                _json.dumps({"status": "failed", "stages": [], "error": {"message": "Report generation failed."}}),
+                encoding="utf-8",
+            )
+
+    threading.Thread(target=run_job, daemon=True).start()
     return {"job_id": job_id}
 
 

@@ -11,9 +11,14 @@ import os
 from datetime import datetime, timezone
 
 from models.base import BudgetExceeded, estimate_tokens, get_adapter, load_configs
+from models.openai_compat import resolve_endpoint
 from src.report import contracts
 
-DEFAULT_MODEL = os.environ.get("REPORT_MODEL", "claude_opus55")
+DEFAULT_MODEL = os.environ.get("REPORT_MODEL") or (
+    "openrouter_gemini35flash"
+    if not os.environ.get("ANTHROPIC_API_KEY") and resolve_endpoint("openrouter")[0]
+    else "claude_opus55"
+)
 DEFAULT_MAX_USD = float(os.environ.get("REPORT_MAX_USD", "1.00"))   # hard cap per report (all calls)
 PRICING_SOURCE = "models/configs.json (prices copied from models/catalog.json, verified 2026-11-21)"
 
