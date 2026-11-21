@@ -114,7 +114,7 @@ Schéma : `schemas/llm_input.schema.json` · validation : `python -m src.validat
 | Bloc | Contenu |
 |---|---|
 | `request` | les 4 entrées |
-| `identification` | UID, statut au registre, signaux de faillite, EGID, canton, NOGA, taille, `annual_revenue_chf` / `estimated_market_value_chf` / `requested_coverages` / `insurance_premium_estimate_chf` (null = non public / non calculé) |
+| `identification` | UID, statut au registre, signaux de faillite, EGID, canton, NOGA, taille, **`shared_building`** (autres entreprises enregistrées dans le même bâtiment — la valeur de reconstruction porte alors sur tout le bâtiment), `annual_revenue_chf` / `estimated_market_value_chf` / `requested_coverages` / `insurance_premium_estimate_chf` (null = non public / non calculé) |
 | `features` | les 19 features |
 | `feature_evidence` | par feature : `source_ids` + note |
 | `feature_coverage_before_llm` | remplissage P0 / P1 / P2 |

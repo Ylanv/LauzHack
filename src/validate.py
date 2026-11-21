@@ -1,4 +1,4 @@
-"""Validate an llm_input.json: JSON Schema + consistency checks.
+"""Validate an llm_input.json (or its for_llm version): JSON Schema + consistency checks.
 
     python -m src.validate probe_out/cmds-sa/llm_input.json
 """
@@ -13,7 +13,11 @@ SCHEMA = Path(__file__).resolve().parent.parent / "schemas" / "llm_input.schema.
 
 
 def validate(doc: dict) -> list[str]:
+    """Validates the full llm_input.json, or its LLM version (for_llm_text: same JSON without the photos' data_url)."""
     schema = json.loads(SCHEMA.read_text(encoding="utf-8"))
+    images = doc.get("images") or {}
+    if images and not any("data_url" in i for i in images.values()):  # for_llm_text() output
+        schema["properties"]["images"]["additionalProperties"]["required"].remove("data_url")
     errors = [f"schema: {'/'.join(map(str, e.absolute_path)) or '<root>'}: {e.message}"
               for e in Draft202012Validator(schema).iter_errors(doc)]
     if errors:

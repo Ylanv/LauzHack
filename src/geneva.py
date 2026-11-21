@@ -9,6 +9,7 @@ Tested on Geneva SMEs — what each layer adds to the 25 features:
 - SIT_AUTOR_DOSSIER (in footprint)   → building permits: renovations, transformations AND declared activities
                                        (e.g. "aménagement d'un atelier de galvanoplastie")
 - REG_ENTREPRISE_ETABLISSEMENT (UID) → NOGA code, branch, size class (employees), WEBSITE
+- REG_ENTREPRISE_ETABLISSEMENT (in footprint) → other companies in the same building (shared building)
 """
 
 import json
@@ -40,10 +41,22 @@ NOGA_HAZARDS = {
 
 
 def _q(service, params, layer=0):
+    """ArcGIS query via POST: polygons of large buildings make GET URLs too long (the server then returns HTML)."""
     p = {"outFields": "*", "returnGeometry": "false", "f": "json"}
     p.update(params)
-    r = _client.get(f"{SITG}/{service}/FeatureServer/{layer}/query", params=p).json()
-    return [f["attributes"] for f in r.get("features", [])]
+    r = _client.post(f"{SITG}/{service}/FeatureServer/{layer}/query", data=p)
+    r.raise_for_status()
+    return [f["attributes"] for f in r.json().get("features", [])]
+
+
+def _result(future, default):
+    """One failing SITG layer must not lose the others."""
+    if future is None:
+        return default
+    try:
+        return future.result()
+    except Exception:  # noqa: BLE001
+        return default
 
 
 def _date(ms):
@@ -55,6 +68,41 @@ def noga_hazard(code):
         if code and code[:n] in NOGA_HAZARDS:
             return NOGA_HAZARDS[code[:n]]
     return None
+
+
+# Establishments that do not physically occupy premises (pension funds, holdings, investment companies).
+NON_OCCUPANT_NOGA = ("653", "642", "6499")
+LEGAL_SUFFIX = re.compile(r"\b(sa|s\.a\.|sàrl|sarl|sagl|ag|gmbh|ltd|société coopérative|societe cooperative|"
+                          r"en liquidation|in liquidation)\b\.?", re.I)
+
+
+def norm_company(name: str) -> str:
+    """'Nutrifrais SA' and 'Nutrifrais' are the same establishment listed twice in the register."""
+    return re.sub(r"[^a-z0-9à-ÿ]+", " ", LEGAL_SUFFIX.sub(" ", (name or "").lower())).strip()
+
+
+def _occupants(footprint_geojson) -> list[dict]:
+    """Companies registered inside the building footprint (+5 m: register points sit on the address/entrance)."""
+    from shapely.geometry import Point, shape
+    zone = shape(footprint_geojson).buffer(5)
+    # Query by bounding box (a large building's polygon makes the URL too long), then filter precisely in Python.
+    x0, y0, x1, y1 = zone.bounds
+    r = _client.get(f"{SITG}/REG_ENTREPRISE_ETABLISSEMENT/FeatureServer/0/query",
+                    params={"geometry": f"{x0},{y0},{x1},{y1}", "geometryType": "esriGeometryEnvelope", "inSR": 2056,
+                            "spatialRel": "esriSpatialRelIntersects", "outSR": 2056, "returnGeometry": "true", "f": "json",
+                            "outFields": "NOM,RAISON_SOCIALE,NUM_IDE,CODE_NOGA,BRANCHE,TAILLE"})
+    r.raise_for_status()
+    rows = [f["attributes"] for f in r.json().get("features", [])
+            if f.get("geometry") and zone.contains(Point(f["geometry"]["x"], f["geometry"]["y"]))]
+    seen, out = set(), []
+    for a in rows:
+        name = a.get("RAISON_SOCIALE") or a.get("NOM")
+        key = norm_company(name)
+        if not key or key in seen or str(a.get("CODE_NOGA") or "").startswith(NON_OCCUPANT_NOGA):
+            continue
+        seen.add(key)
+        out.append({"name": name, "uid": a.get("NUM_IDE"), "branch": a.get("BRANCHE"), "size": a.get("TAILLE")})
+    return out
 
 
 def building(egid, footprint_geojson=None) -> dict:
@@ -75,9 +123,10 @@ def building(egid, footprint_geojson=None) -> dict:
                                                     "spatialRel": "esriSpatialRelIntersects"})
         fpol = ex.submit(_q, "GOL_SITES_POLLUES", {"geometry": geom, "geometryType": "esriGeometryPolygon", "inSR": 2056,
                                                      "spatialRel": "esriSpatialRelIntersects"}) if footprint_geojson else None
-        h, t, i, b = fh.result(), ft.result(), fi.result(), fb.result()
-        pol = fpol.result() if fpol else []
-        p = fp.result() if fp else None
+        focc = ex.submit(_occupants, footprint_geojson) if footprint_geojson else None
+        h, t, i, b = _result(fh, []), _result(ft, []), _result(fi, []), _result(fb, [])
+        pol, p = _result(fpol, []), _result(fp, None)
+        out["occupants"] = _result(focc, [])
     if h:
         a = h[0]
         out["building"] = {k.lower(): a.get(k) for k in ("DESTINATION", "NOMEN_CLASSE", "EPOQUE_CONSTRUCTION", "ANNEE_CONSTRUCTION",

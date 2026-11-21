@@ -1,6 +1,6 @@
 {
   "schema_version": "2.0-llm-input",
-  "generated_at": "2026-11-21T16:47:36.620990Z",
+  "generated_at": "2026-11-21T18:20:44.446747Z",
   "request": {
     "client_name": "Marie Dupont",
     "company_legal_name": "CMDS SA",
@@ -24,6 +24,17 @@
     "company_size_employees": "10-19 travailleurs",
     "noga_code": "256201",
     "industry_type_declared": "Metalworking / machining / locksmith",
+    "shared_building": {
+      "is_shared": true,
+      "occupants_count": 2,
+      "other_occupants": [
+        {
+          "name": "Engelhard SA",
+          "branch": "Serrureries",
+          "size": "6-9 travailleurs"
+        }
+      ]
+    },
     "annual_revenue_chf": null,
     "annual_revenue_note": "not public for private companies — ask the client",
     "requested_coverages": null,
@@ -183,14 +194,14 @@
         "src_2",
         "src_3"
       ],
-      "note": "building volume (RegBL gvol or Geneva cadastre footprint x height) = 4,004 m³ × CHF 400–700/m³ (industrial building)"
+      "note": "value of the WHOLE building, shared by 2 companies (the insured share depends on the client's premises) · building volume (RegBL gvol or Geneva cadastre footprint x height) = 4,004 m³ × CHF 400–700/m³ (industrial building)"
     },
     "building_usage": {
       "source_ids": [
         "src_10",
         "src_8"
       ],
-      "note": null
+      "note": "shared building: 2 companies registered in this footprint"
     },
     "construction_material": {
       "source_ids": [
@@ -498,6 +509,20 @@
           }
         },
         "status": "ok",
+        "occupants": [
+          {
+            "name": "Engelhard SA",
+            "uid": "CHE248606159",
+            "branch": "Serrureries",
+            "size": "6-9 travailleurs"
+          },
+          {
+            "name": "CMDS",
+            "uid": null,
+            "branch": "Ateliers mécaniques",
+            "size": "10-19 travailleurs"
+          }
+        ],
         "building": {
           "destination": "Atelier",
           "nomen_classe": "Activité",
@@ -732,7 +757,7 @@
     "tool_calls": [
       {
         "tool": "aerial_image",
-        "duration_ms": 4,
+        "duration_ms": 5,
         "tokens_input": 0,
         "tokens_output": 0,
         "cache_hit": true
@@ -755,6 +780,6 @@
     "tokens_input": 0,
     "tokens_output": 0,
     "cost_chf": 0.0,
-    "duration_ms": 14554
+    "duration_ms": 16708
   }
 }

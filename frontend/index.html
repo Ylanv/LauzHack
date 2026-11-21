@@ -153,6 +153,9 @@ function render(d, secs) {
     ["Signaux de faillite", `${risk.level || "—"} ${(risk.signals || []).join("; ")}`], ["Secteur (NOGA)", id.noga_code],
     ["Taille", id.company_size_employees], ["Industrie déclarée", id.industry_type_declared], ["EGID", id.building_egid],
     ["Canton · régime", `${id.canton} · ${id.cantonal_insurance_regime}`], ["Chiffre d'affaires", id.annual_revenue_chf ?? "non public"],
+    ["Bâtiment partagé", id.shared_building?.is_shared
+      ? `oui — ${id.shared_building.occupants_count} entreprises : ${id.shared_building.other_occupants.map(o => o.name).join(", ")}`
+      : "non (seule entreprise enregistrée dans le bâtiment)"],
   ].map(([k, v]) => `<div>${esc(k)}</div><div>${esc(v)}</div>`).join("");
   $("r-photos").innerHTML = Object.entries(d.images).map(([n, i]) =>
     `<figure><img src="${i.data_url}" alt="${esc(i.label)}"><figcaption><b>${esc(i.label)}</b><br>${esc(i.shows)}<br>${esc(i.credit)}</figcaption></figure>`).join("")

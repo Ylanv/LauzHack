@@ -128,18 +128,31 @@ def build(blocks: dict, industry_type: str | None = None) -> dict:
                 return v, st, src
         return None, "unknown", None
 
+    # Shared building: other companies registered in the same footprint (cantonal register). Flagged, not rejected.
+    from src.geneva import norm_company
+    me = {norm_company(n) for n in (c.get("registered_names") or "").split(" | ")}
+    my_uid = (c.get("uid") or "").replace("-", "").replace(".", "")
+    def same_company(name):  # "Boucherie-Charcuterie des Alpes" == "CBM, Boucherie-Charcuterie des Alpes Sàrl"
+        n = norm_company(name)
+        return any(n == m or (len(n) > 6 and n in m) or (len(m) > 6 and m in n) for m in me if m)
+    others = [o for o in ge.get("occupants") or [] if not same_company(o["name"]) and (o.get("uid") or "") != my_uid]
+    shared = {"is_shared": bool(others), "occupants_count": len(others) + 1,
+              "other_occupants": [{k: o.get(k) for k in ("name", "branch", "size")} for o in others[:10]]}
+    shared_note = (f"value of the WHOLE building, shared by {shared['occupants_count']} companies "
+                   "(the insured share depends on the client's premises)") if others else None
+
     f = []
     # ---- building
     f.append(_rec("reconstruction_value_chf",
                   {k: rc.get(k) for k in ("best_estimate_chf", "low_chf", "high_chf")} if rc.get("best_estimate_chf") else None,
-                  "estimated", [calc, regbl, av], rc.get("method"), verify=True))
+                  "estimated", [calc, regbl, av], " · ".join(x for x in (shared_note, rc.get("method")) if x) or None, verify=True))
     usage = USAGE.get(b.get("class_code"))
     if gb.get("destination"):
         usage = f"{gb['destination']} ({gb.get('nomen_classe')})"
     activity = web.get("activity_summary")
     f.append(_rec("building_usage", " — ".join(x for x in (usage, activity) if x) or None,
                   "verified" if usage else "inferred", [sitg if gb.get("destination") else regbl, webs if activity else None],
-                  "mixed-use building: the company occupies only part of it" if gb.get("mixed_use") else None))
+                  (f"shared building: {shared['occupants_count']} companies registered in this footprint" if others else None)))
     # Wrong-building guard: the camera aims at the footprint centroid but a neighbour may fill the frame.
     known_floors = b.get("floors") or gb.get("niveaux_horsol")
     # A matching company sign proves it is the right building; otherwise reject only large floor mismatches
@@ -319,6 +332,7 @@ def build(blocks: dict, industry_type: str | None = None) -> dict:
         "company_size_employees": est.get("size_class"),
         "noga_code": est.get("noga_code"),
         "industry_type_declared": ind.get("label"),
+        "shared_building": shared,
         "annual_revenue_chf": None,
         "annual_revenue_note": "not public for private companies — ask the client",
         "requested_coverages": None,

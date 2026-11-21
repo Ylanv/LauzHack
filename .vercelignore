@@ -8,3 +8,4 @@ probe_out/
 __pycache__/
 *.pyc
 .vercel/
+photos_test/
