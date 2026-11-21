@@ -109,7 +109,7 @@ Format de chaque feature : `{"feature", "value", "status", "requires_verificatio
 
 ## Sortie — `llm_input.json`
 
-Schéma : `schemas/llm_input.schema.json` · validation : `python -m src.validate <fichier>`.
+Schéma : `schemas/FEATURE/llm_input.v2.schema.json` · validation : `python -m src.validate <fichier>`.
 
 | Bloc | Contenu |
 |---|---|
@@ -161,7 +161,7 @@ scripts/build_llm_input.py   un llm_input.json
 scripts/llm_input_matrix.py  un lot d'entreprises → tableau de couverture des features
 scripts/probe_sources.py     debug : toutes les sources publiques sur une adresse
 examples/                    llm_input exemple (complet + version LLM)
-schemas/llm_input.schema.json  contrat de sortie
+schemas/FEATURE/llm_input.v2.schema.json  contrat de sortie
 ```
 
 ## Données SITG embarquées
