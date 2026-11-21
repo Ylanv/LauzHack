@@ -12,14 +12,13 @@ Tested on Geneva SMEs — what each layer adds to the 25 features:
 - REG_ENTREPRISE_ETABLISSEMENT (in footprint) → other companies in the same building (shared building)
 """
 
-import json
 import re
 from datetime import datetime, timezone
 
 import httpx
 
 SITG = "https://vector.sitg.ge.ch/arcgis/rest/services"
-_client = httpx.Client(timeout=30, headers={"User-Agent": "axa-smart-property/0.1"})
+_client = httpx.Client(timeout=30, headers={"User-Agent": "axa-smart-property/0.1", "Accept": "application/json"})
 
 RENOVATION_KW = re.compile(r"rénov|renov|transform|surélév|assainiss|isolation|toiture|façade|facade|réfection|remplacement", re.I)
 GAS_KW = re.compile(r"gaz|four|fours|forge|chaufferie|brûleur|bruleur|cuisson|fumoir", re.I)
@@ -41,12 +40,37 @@ NOGA_HAZARDS = {
 
 
 def _q(service, params, layer=0):
-    """ArcGIS query via POST: polygons of large buildings make GET URLs too long (the server then returns HTML)."""
+    """ArcGIS query via GET with short URLs. (POST is refused from cloud IPs — 406 on Vercel — and sending a large
+    building's polygon in a GET URL is too long: spatial queries use _in_footprint() instead.)"""
     p = {"outFields": "*", "returnGeometry": "false", "f": "json"}
     p.update(params)
-    r = _client.post(f"{SITG}/{service}/FeatureServer/{layer}/query", data=p)
+    r = _client.get(f"{SITG}/{service}/FeatureServer/{layer}/query", params=p)
     r.raise_for_status()
     return [f["attributes"] for f in r.json().get("features", [])]
+
+
+def _in_footprint(service, footprint_geojson, out_fields="*", buffer_m=0.0):
+    """Features intersecting the footprint: bounding-box query (short GET URL), exact filter in Python."""
+    from shapely.geometry import Point, Polygon, shape
+    zone = shape(footprint_geojson).buffer(buffer_m) if buffer_m else shape(footprint_geojson)
+    x0, y0, x1, y1 = zone.bounds
+    r = _client.get(f"{SITG}/{service}/FeatureServer/0/query",
+                    params={"geometry": f"{x0},{y0},{x1},{y1}", "geometryType": "esriGeometryEnvelope", "inSR": 2056,
+                            "spatialRel": "esriSpatialRelIntersects", "outSR": 2056, "returnGeometry": "true",
+                            "outFields": out_fields, "f": "json"})
+    r.raise_for_status()
+    out = []
+    for f in r.json().get("features", []):
+        g = f.get("geometry") or {}
+        if "x" in g:
+            geom = Point(g["x"], g["y"])
+        elif g.get("rings"):
+            geom = Polygon(g["rings"][0]).buffer(0)
+        else:
+            continue
+        if zone.intersects(geom):
+            out.append(f["attributes"])
+    return out
 
 
 def _result(future, default):
@@ -83,17 +107,8 @@ def norm_company(name: str) -> str:
 
 def _occupants(footprint_geojson) -> list[dict]:
     """Companies registered inside the building footprint (+5 m: register points sit on the address/entrance)."""
-    from shapely.geometry import Point, shape
-    zone = shape(footprint_geojson).buffer(5)
-    # Query by bounding box (a large building's polygon makes the URL too long), then filter precisely in Python.
-    x0, y0, x1, y1 = zone.bounds
-    r = _client.get(f"{SITG}/REG_ENTREPRISE_ETABLISSEMENT/FeatureServer/0/query",
-                    params={"geometry": f"{x0},{y0},{x1},{y1}", "geometryType": "esriGeometryEnvelope", "inSR": 2056,
-                            "spatialRel": "esriSpatialRelIntersects", "outSR": 2056, "returnGeometry": "true", "f": "json",
-                            "outFields": "NOM,RAISON_SOCIALE,NUM_IDE,CODE_NOGA,BRANCHE,TAILLE"})
-    r.raise_for_status()
-    rows = [f["attributes"] for f in r.json().get("features", [])
-            if f.get("geometry") and zone.contains(Point(f["geometry"]["x"], f["geometry"]["y"]))]
+    rows = _in_footprint("REG_ENTREPRISE_ETABLISSEMENT", footprint_geojson,
+                         "NOM,RAISON_SOCIALE,NUM_IDE,CODE_NOGA,BRANCHE,TAILLE", buffer_m=5)
     seen, out = set(), []
     for a in rows:
         name = a.get("RAISON_SOCIALE") or a.get("NOM")
@@ -107,22 +122,16 @@ def _occupants(footprint_geojson) -> list[dict]:
 
 def building(egid, footprint_geojson=None) -> dict:
     out = {"status": "ok"}
-    # The 5 SITG layers are independent → query them in parallel (~1 s instead of ~5 s).
+    # The 7 SITG layers are independent → query them in parallel.
     from concurrent.futures import ThreadPoolExecutor
     w = f"EGID={int(egid)}" if egid else "1=0"
-    with ThreadPoolExecutor(5) as ex:
+    with ThreadPoolExecutor(7) as ex:
         fh = ex.submit(_q, "CAD_BATIMENT_HORSOL", {"where": w})
         ft = ex.submit(_q, "CAD_BATI3D_BASIC_TOIT", {"where": w, "outFields": "PENTE_MIN,PENTE_MAX,PENTE_MOY"})
         fi = ex.submit(_q, "OCEN_ETAT_IDC_PUBLIC", {"where": w, "outFields": "SRE_M2,DERNIER_IDC,ANNEE_DERNIER_IDC,ETAT_IDC_GEN"})
         fb = ex.submit(_q, "SCANE_CHAUDIERE", {"where": w})
-        fp = None
-        if footprint_geojson:
-            rings = footprint_geojson["coordinates"] if footprint_geojson["type"] == "Polygon" else footprint_geojson["coordinates"][0]
-            geom = json.dumps({"rings": rings, "spatialReference": {"wkid": 2056}})
-            fp = ex.submit(_q, "SIT_AUTOR_DOSSIER", {"geometry": geom, "geometryType": "esriGeometryPolygon", "inSR": 2056,
-                                                    "spatialRel": "esriSpatialRelIntersects"})
-        fpol = ex.submit(_q, "GOL_SITES_POLLUES", {"geometry": geom, "geometryType": "esriGeometryPolygon", "inSR": 2056,
-                                                     "spatialRel": "esriSpatialRelIntersects"}) if footprint_geojson else None
+        fp = ex.submit(_in_footprint, "SIT_AUTOR_DOSSIER", footprint_geojson) if footprint_geojson else None
+        fpol = ex.submit(_in_footprint, "GOL_SITES_POLLUES", footprint_geojson) if footprint_geojson else None
         focc = ex.submit(_occupants, footprint_geojson) if footprint_geojson else None
         h, t, i, b = _result(fh, []), _result(ft, []), _result(fi, []), _result(fb, [])
         pol, p = _result(fpol, []), _result(fp, None)
