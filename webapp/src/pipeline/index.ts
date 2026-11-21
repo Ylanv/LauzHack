@@ -45,6 +45,47 @@ export async function startReport(i: RequestInput, accessCode?: string): Promise
   throw new AssessError("service", "The assessment service had a problem. Your details are kept, please try again.")
 }
 
+/** One live report per submission, with live progress: POST /api/reports/stream runs the full pipeline while the
+ *  request stays open (needed on Vercel, where a background job would be suspended) and streams one JSON line per
+ *  progress change (same shape as GET /api/reports/{id}). Resolves with the last status. Never retried automatically. */
+export async function streamReport(i: RequestInput, accessCode: string | undefined, onProgress: (p: ReportProgress) => void): Promise<ReportProgress> {
+  let r: Response
+  try {
+    r = await fetch("/api/reports/stream", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...(accessCode ? { "X-Access-Code": accessCode } : {}) },
+      body: JSON.stringify({ client_name: i.contact, company_legal_name: i.company, address: i.address, industry_type: i.industry }),
+    })
+  } catch { throw new AssessError("service", "We could not reach the assessment service. Your details are kept, please try again.") }
+  if (!r.ok || !r.body) {
+    let detail = ""
+    try { const j = await r.json(); detail = typeof j.detail === "string" ? j.detail : Array.isArray(j.detail) ? j.detail.map((d: { msg?: string }) => d.msg).filter(Boolean).join("; ") : "" } catch { /* no body */ }
+    if (r.status === 401) throw new AssessError("code", "The access code is missing or not valid.")
+    if (r.status === 422) throw new AssessError("input", detail || "Some details could not be matched. Please check them.")
+    throw new AssessError("service", "The assessment service had a problem. Your details are kept, please try again.")
+  }
+  const reader = r.body.getReader(), dec = new TextDecoder()
+  let buf = "", last: ReportProgress | null = null
+  const lost = () => new AssessError("service", "We lost the connection to the assessment service. Your details are kept, please try again.")
+  for (;;) {
+    let chunk: ReadableStreamReadResult<Uint8Array>
+    try { chunk = await reader.read() } catch { throw lost() }
+    if (chunk.done) break
+    buf += dec.decode(chunk.value, { stream: true })
+    let nl: number
+    while ((nl = buf.indexOf("\n")) >= 0) {
+      const line = buf.slice(0, nl).trim(); buf = buf.slice(nl + 1)
+      if (!line) continue
+      const msg = JSON.parse(line)
+      if (msg.heartbeat) continue
+      last = msg as ReportProgress
+      onProgress(last)
+    }
+  }
+  if (!last || last.status === "running") throw lost()
+  return last
+}
+
 /** Progress of a report job (GET /api/reports/{id}): status and the stage running now (etl, features, llm, validate). */
 export interface ReportProgress { job_id: string; status: "running" | "succeeded" | "invalid_report" | "failed"; stage: string | null; done_stages: string[]; error: { stage?: string; message?: string } | null }
 export async function reportStatus(job: string): Promise<ReportProgress> {
