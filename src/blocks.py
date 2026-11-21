@@ -9,7 +9,7 @@ Each block = {"status", "data", "photos"?, "llm_call"?}. Blocks B/C are skipped 
 import json
 
 from src import config
-from src.prompts import SYSTEM, VISION_PROMPT, VISION_SCHEMA, WEB_PROMPT, WEB_SCHEMA
+from src.prompts import FACADE_PROMPT, FACADE_SCHEMA, SYSTEM, VISION_PROMPT, VISION_SCHEMA, WEB_PROMPT, WEB_SCHEMA
 
 
 def llm_available(role: str) -> bool:
@@ -67,6 +67,21 @@ def block_aerial(probe: dict, use_llm: bool = True) -> dict:
     data, call = llm_call("vision", SYSTEM, VISION_PROMPT.format(m_per_px=img.get("m_per_px")), VISION_SCHEMA,
                           "aerial_image", images=[img["jpeg"]], max_tokens=900)
     return {"status": "ok", "data": data, "photos": photos, "llm_call": call}
+
+
+# ---------------------------------------------------------------- facade (Street View, demo)
+def block_facade(probe: dict, company: str, address: str, use_llm: bool = True) -> dict:
+    from src.streetview import facade_photo
+    sv = facade_photo((probe.get("footprint") or {}).get("geometry"))
+    if sv.get("status") != "ok":
+        return {"status": sv.get("status"), "note": sv.get("note"), "data": None, "photos": []}
+    photos = [{"label": "Street-level facade photo (Google Street View, demo)", "jpeg": sv["jpeg"], "credit": sv["credit"]}]
+    if not use_llm or not llm_available("vision"):
+        return {"status": "skipped", "note": "LLM not called", "data": None, "photos": photos, "camera": sv.get("camera")}
+    from src.llm import llm_call
+    data, call = llm_call("vision", SYSTEM, FACADE_PROMPT.format(company=company, address=address), FACADE_SCHEMA,
+                          "facade", images=[sv["jpeg"]], max_tokens=700)
+    return {"status": "ok", "data": data, "photos": photos, "camera": sv.get("camera"), "llm_call": call}
 
 
 # ---------------------------------------------------------------- C

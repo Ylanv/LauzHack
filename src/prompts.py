@@ -42,6 +42,26 @@ Describe only what is visible on THIS building and its immediate surroundings: r
 roof equipment, outdoor storage (pallets, containers, tanks, wood piles), vegetation touching the walls, neighbours closer
 than ~10 m, and anything on the roof that deserves an inspection. Max 5 observations, max 12 words each."""
 
+# ---------------------------------------------------------------- facade (street-level photo)
+FACADE_SCHEMA = _obj({
+    "facade_visible": {"type": "boolean"},
+    "construction_material": {"type": "string", "enum": ["concrete", "metal_cladding", "masonry_brick", "wood",
+                                                          "glass_curtain_wall", "mixed", "unknown"]},
+    "construction_material_detail": NSTR,
+    "floors_visible": {"type": ["integer", "null"]},
+    "visible_condition": {"type": "string", "enum": ["good", "fair", "poor", "unknown"]},
+    "outdoor_storage": PRESENCE,
+    "outdoor_storage_detail": NSTR,
+    "signage_matches_company": {"type": "string", "enum": ["yes", "no", "no_sign_visible"]},
+    "observations": STR_LIST,
+})
+FACADE_PROMPT = """Street-level photo taken towards the building of the company "{company}" ({address}).
+First decide if the building facade is actually visible (not hidden by trees, trucks, walls, or an indoor view).
+If it is NOT visible: facade_visible=false and every other field unknown/null.
+If visible: main construction material of the walls (concrete, metal cladding / sandwich panels, masonry/brick, wood,
+glass curtain wall, mixed), number of floors visible, visible condition, outdoor storage along the walls
+(pallets, racks, containers, gas bottles, wood), and whether a sign matches the company name. Max 4 observations."""
+
 # ---------------------------------------------------------------- block C: company website
 WEB_SCHEMA = _obj({
     "activity_summary": NSTR,

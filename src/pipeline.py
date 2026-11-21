@@ -15,7 +15,7 @@ from src import building_condition as bc
 from src import geneva
 from src import features as feat
 from src import reconstruction
-from src.blocks import block_aerial, block_public, block_website
+from src.blocks import block_aerial, block_facade, block_public, block_website
 from src.company_profile import company_profile
 from src.llm import build_metrics
 from src.public_data import probe, strip_binary
@@ -114,10 +114,11 @@ def run(client_name: str, company: str, address: str, industry_type: str | None 
 
     # 3) Blocks 2 (vision) and 3 (website) in parallel.
     purpose = (pdata.get("zefix") or {}).get("purpose")
-    with ThreadPoolExecutor(2) as ex:
+    with ThreadPoolExecutor(3) as ex:
         f_b = ex.submit(block_aerial, pdata, use_llm)
         f_c = ex.submit(block_website, scraped, company, address, purpose, use_llm)
-        aerial, web = _safe(f_b, photos_from=pdata.get("swissimage")), _safe(f_c)
+        f_f = ex.submit(block_facade, pdata, company, address, use_llm)
+        aerial, web, facade = _safe(f_b, photos_from=pdata.get("swissimage")), _safe(f_c), _safe(f_f)
 
     # 4) Block 1 completed with SITG + what image / website observed.
     gb = ge.get("building") or {}
@@ -161,10 +162,10 @@ def run(client_name: str, company: str, address: str, industry_type: str | None 
     b["condition"] = bc.condition(regbl_plus, None, reno_year, pv)
     b["heating"] = bc.heating(regbl)
 
-    blocks = {"public_data": public, "aerial_image": aerial, "website": web}
+    blocks = {"public_data": public, "aerial_image": aerial, "facade": facade, "website": web}
     fs = feat.build(blocks, industry_type)
     if not use_llm or not final_report:
-        calls = [x["llm_call"] for x in (aerial, web) if x.get("llm_call")]
+        calls = [x["llm_call"] for x in (aerial, web, facade) if x.get("llm_call")]
         return llm_input(client_name, company, address, fs, blocks, int((time.perf_counter() - t0) * 1000), calls, industry_type)
     report, synth_call = write(blocks, fs["features"])
 
@@ -194,9 +195,9 @@ def llm_input(client_name, company, address, fs, blocks, duration_ms, calls=(), 
     """The hand-off JSON: everything collected without any LLM, ready to send to the LLM step.
     Images are returned separately (bytes) so the JSON stays small; the JSON references them by name."""
     images = {}
-    for key in ("aerial_image", "website"):
+    for key in ("aerial_image", "facade", "website"):
         for i, ph in enumerate(blocks.get(key, {}).get("photos", [])):
-            name = "orthophoto.jpg" if key == "aerial_image" else f"website_{i + 1}.jpg"
+            name = {"aerial_image": "orthophoto.jpg", "facade": "facade_streetview.jpg"}.get(key, f"website_{i + 1}.jpg")
             images[name] = {"jpeg": ph["jpeg"], "label": ph["label"], "credit": ph.get("credit")}
     cov = feat.coverage(fs["features"])
     payload = {
@@ -215,6 +216,9 @@ def llm_input(client_name, company, address, fs, blocks, duration_ms, calls=(), 
                              "status": blocks["aerial_image"]["status"],
                              "vision": blocks["aerial_image"].get("data"),          # Gemini output (VISION_SCHEMA)
                              "note": blocks["aerial_image"].get("note")},
+            "facade": {"image": "facade_streetview.jpg" if "facade_streetview.jpg" in images else None,
+                       "status": blocks["facade"]["status"], "camera": blocks["facade"].get("camera"),
+                       "vision": blocks["facade"].get("data"), "note": blocks["facade"].get("note")},
             "website": {"status": blocks["website"]["status"], "meta": blocks["website"].get("meta"),
                         "extraction": blocks["website"].get("data"),            # Gemini output on text + photos (WEB_SCHEMA)
                         "raw": blocks["website"].get("raw"), "note": blocks["website"].get("note"),

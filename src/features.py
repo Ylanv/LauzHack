@@ -89,6 +89,9 @@ def build(blocks: dict, industry_type: str | None = None) -> dict:
     pub = blocks["public_data"]["data"]
     c, b, h = pub["company"], pub["building"], pub["natural_hazards"]
     vis = blocks.get("aerial_image", {}).get("data") or {}
+    fac = blocks.get("facade", {}).get("data") or {}
+    fac = fac if fac.get("facade_visible") else {}
+    fac_warning = None
     web = blocks.get("website", {}).get("data") or {}
     site = (blocks.get("website", {}).get("meta") or {}).get("site")
 
@@ -98,6 +101,7 @@ def build(blocks: dict, industry_type: str | None = None) -> dict:
     nat = S.add("nat", "geo.admin.ch (FOEN / MeteoSwiss / SIA 261)", "official_geodata", "https://wms.geo.admin.ch")
     cant = S.add("cant", "Cantonal hazard maps (geodienste.ch)", "official_geodata", "https://geodienste.ch/services/gefahrenkarten")
     img = S.add("img", "SWISSIMAGE © swisstopo + vision model", "aerial_image", None, "observed") if vis else None
+    sv = S.add("sv", "Google Street View (demo) + vision model", "street_image", None, "observed") if fac else None
     webs = S.add("web", "Company website", "company_website", site, "inferred") if web else None
     calc = S.add("calc", "Indicative cost model (volume × CHF/m³)", "derived_calculation", None, "estimated")
     ge = pub.get("geneva") or {}
@@ -132,9 +136,24 @@ def build(blocks: dict, industry_type: str | None = None) -> dict:
     f.append(_rec("building_usage", " — ".join(x for x in (usage, activity) if x) or None,
                   "verified" if usage else "inferred", [sitg if gb.get("destination") else regbl, webs if activity else None],
                   "mixed-use building: the company occupies only part of it" if gb.get("mixed_use") else None))
-    mat = web.get("construction_material") or vis.get("construction_material_hint")
-    f.append(_rec("construction_material", mat, "inferred" if web.get("construction_material") else "observed",
-                  [webs if web.get("construction_material") else img]))
+    # Wrong-building guard: the camera aims at the footprint centroid but a neighbour may fill the frame.
+    known_floors = b.get("floors") or gb.get("niveaux_horsol")
+    # A matching company sign proves it is the right building; otherwise reject only large floor mismatches
+    # (industrial halls: the cadastre may count 3 levels where the street sees one tall storey).
+    if (fac and fac.get("signage_matches_company") != "yes" and fac.get("floors_visible") and known_floors
+            and abs(fac["floors_visible"] - known_floors) >= 3):
+        fac_warning = (f"street photo shows {fac['floors_visible']} floors vs {known_floors} in the cadastre: "
+                       "probably a neighbouring building, facade ignored")
+        fac = {}
+    fac_mat = fac.get("construction_material") if fac.get("construction_material") not in (None, "unknown") else None
+    if fac_mat:
+        detail = fac.get("construction_material_detail")
+        f.append(_rec("construction_material", fac_mat.replace("_", " ") + (f" ({detail})" if detail else ""), "observed", [sv],
+                      "seen on the street-level facade photo"))
+    else:
+        mat = web.get("construction_material") or vis.get("construction_material_hint")
+        f.append(_rec("construction_material", mat, "inferred" if web.get("construction_material") else "observed",
+                      [webs if web.get("construction_material") else img], fac_warning))
     year = cons.get("from") if cons.get("from") == cons.get("to") else (f"{cons.get('from') or '…'}–{cons.get('to') or '…'}" if cons.get("basis") else None)
     if not year and (gb.get("annee_construction") or gb.get("epoque_construction")):
         year, cons = gb.get("annee_construction") or gb.get("epoque_construction"), {"basis": "SITG cadastre"}
@@ -231,6 +250,8 @@ def build(blocks: dict, industry_type: str | None = None) -> dict:
     fl = web.get("flammable_materials_detail") if web.get("flammable_materials") in PRESENT else None
     if vis.get("outdoor_storage") in PRESENT:
         fl = "; ".join(x for x in (fl, f"outdoor: {vis.get('outdoor_storage_detail') or 'storage visible'}") if x)
+    if fac.get("outdoor_storage") in PRESENT:
+        fl = "; ".join(x for x in (fl, f"along the facade: {fac.get('outdoor_storage_detail') or 'storage visible'}") if x)
     if heat.get("energy_source") in ("heating oil", "wood", "wood (logs)", "wood (chips)", "wood (pellets)"):
         fl = "; ".join(x for x in (fl, f"{heat['energy_source']} fuel for heating (RegBL)") if x)
     oil = [x for x in active if (x.get("fuel") or "").upper() in ("HEL", "MAZOUT") or "mazout" in (x.get("fuel") or "").lower()]
@@ -271,7 +292,10 @@ def build(blocks: dict, industry_type: str | None = None) -> dict:
 
     # ---- maintenance & history
     repairs = list(vis.get("possible_roof_issues") or [])
-    f.append(_rec("potential_repair_needs", repairs or None, "observed", [img], "to inspect, not confirmed damage"))
+    if fac.get("visible_condition") in ("fair", "poor"):
+        repairs.append(f"facade condition looks {fac['visible_condition']} (street-level photo)")
+    f.append(_rec("potential_repair_needs", repairs or None, "observed",
+                  [img, sv if fac.get("visible_condition") in ("fair", "poor") else None], "to inspect, not confirmed damage"))
 
     ident = {
         "company_name": c.get("registered_names"),

@@ -68,7 +68,7 @@
     },
     "evidence": {
       "type": "object",
-      "required": ["public_data", "aerial_image", "website"]
+      "required": ["public_data", "aerial_image", "facade", "website"]
     },
     "images": { "type": "object" },
     "metrics": { "type": "object", "required": ["tool_calls", "tokens_input", "tokens_output", "cost_chf", "duration_ms"] }

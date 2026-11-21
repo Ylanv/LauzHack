@@ -21,7 +21,7 @@ python -m src.validate probe_out/cmds-sa/llm_input.json            # → OK
 uvicorn src.main:app --reload    # POST /api/llm-input · GET /api/industries · GET /api/health
 ```
 
-`build_llm_input.py` écrit dans `probe_out/<entreprise>/` : `llm_input.json` + `orthophoto.jpg` (bâtiment entouré en rouge) + `website_1..3.jpg`. Option `--no-vision` = 0 token.
+`build_llm_input.py` écrit dans `probe_out/<entreprise>/` : `llm_input.json` + `orthophoto.jpg` (bâtiment entouré en rouge) + `facade_streetview.jpg` + `website_1..3.jpg`. Option `--no-vision` = 0 token.
 
 ---
 
@@ -55,8 +55,9 @@ flowchart TD
       H["Dangers<br/>séisme · grêle · crue · glissement<br/>ruissellement (profondeur lue dans l'image de la carte)"]:::py
     end
     A --> IMG["Orthophoto SWISSIMAGE<br/>recadrée, contour rouge"]:::py --> VIS["Gemini : toit, stockage extérieur,<br/>points à inspecter"]:::llm
+    A --> SV["Façade Google Street View<br/>(démo)"]:::py --> FAC["Gemini : matériau, état,<br/>stockage le long des murs"]:::llm
     A --> WEB["Site web (via registre cantonal)<br/>texte + 3 photos"]:::py --> EXT["Gemini : activité, procédés"]:::llm
-    VIS & EXT --> F["19 features + sources"]:::py --> OUT["llm_input.json + images"]:::output
+    VIS & FAC & EXT --> F["19 features + sources"]:::py --> OUT["llm_input.json + images"]:::output
     OUT -.-> NEXT["Étape suivante : LLM rapport final"]:::stop
 
     classDef input fill:#e8eefc,stroke:#3b5bdb,color:#1b2b6b
@@ -91,10 +92,10 @@ Format de chaque feature : `{"feature", "value", "status", "requires_verificatio
 | `gas_installations` | P1 | **Registre des chaudières** + autorisations (« gaz ») + type d'industrie | 9/12 |
 | `flammable_material_storage` | P1 | Chaudière/citerne mazout, autorisations (citerne, stockage), sites pollués | 12/12 |
 | `potential_repair_needs` | P1 | Vision (à inspecter, jamais confirmé) | 6/12 |
-| `construction_material` | P1 | Vision (faible) — Street View prévu | 3/12 |
+| `construction_material` | P1 | **Façade Google Street View** + vision (garde-fous : photos Google uniquement, façade visible, enseigne ou cohérence des étages) | 8/12 |
 | `reconstruction_value_chf` | P2 | Volume (cadastre) × CHF/m³ selon type — **approximatif** | 12/12 |
 
-\* sur 12 PME industrielles genevoises réelles (ateliers mécaniques, traitement des métaux, alimentaire, garage, logistique). **P0 99 % · P1 79 %**.
+\* sur 12 PME industrielles genevoises réelles (ateliers mécaniques, traitement des métaux, alimentaire, garage, logistique). **P0 99 % · P1 88 %**.
 
 `status` : `verified` (registre officiel) · `observed` (vision) · `inferred` (site web / secteur / industrie déclarée) · `declared` (client) · `estimated` (calcul) · `unknown` (non trouvé, `value = null`).
 
@@ -135,6 +136,7 @@ src/building_condition.py âge / état / chauffage (RegBL)
 src/reconstruction.py    valeur de reconstruction (volume × CHF/m³)
 src/industries.py        types d'industrie (formulaire) → procédés typiques
 src/web_scrape.py        site web : texte, phrases à risque, photos
+src/streetview.py        façade Google Street View (démo)
 src/blocks.py            blocs de preuves (vision Gemini sur l'orthophoto / le site)
 src/features.py          les 19 features + sources
 src/prompts.py           prompts + sous-schémas JSON stricts des appels LLM
@@ -159,7 +161,8 @@ scripts/run_report.py        rapport final complet (avec LLM de synthèse)
 - Grands bâtiments partagés (plusieurs entreprises) : la valeur de reconstruction porte sur tout le bâtiment.
 - Hauteur du cadastre parfois aberrante (cheminées) → contrôlée ; surface chauffée couvrant plusieurs bâtiments → contrôlée.
 - Signaux de faillite via l'API de zefix.ch (non officielle) → en production : identifiants ZefixPublicREST.
-- Matériau de construction : Street View (démo, clé Google requise) ; Mapillary testé, quasi aucune couverture en zone industrielle.
+- **Street View = démo hackathon** : les conditions Google sont restrictives sur l'extraction de données par IA. 1 image par rapport, non stockée, attribution affichée. En production : imagerie sous licence ou photo fournie par le client. Mapillary testé : quasi aucune couverture en zone industrielle.
+- Street View peut viser un bâtiment voisin (rejeté si l'écart d'étages avec le cadastre est ≥ 3 sans enseigne visible).
 
 ## Sources
 
