@@ -1,0 +1,15 @@
+{
+  "_comment": "Mascot colours. Used by scripts/build_axolotl.py (texture) and the face renderer (eyes, mouth, cheeks). Rebuild the model after editing: python scripts/build_axolotl.py",
+  "body": "#00008F",
+  "bodySpot": "#2B2BB5",
+  "belly": "#EEF1FF",
+  "white": "#FFFFFF",
+  "gill": "#FF1721",
+  "gillMid": "#E0141E",
+  "gillDark": "#B50D16",
+  "eyeWhite": "#FFFFFF",
+  "pupil": "#00005B",
+  "mouth": "#00005B",
+  "mouthInside": "#FF1721",
+  "cheek": "#FF4B53"
+}
