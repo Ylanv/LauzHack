@@ -45,7 +45,7 @@ export default function Dashboard() {
       <aside className="jr-side no-print">
         <button type="button" className="jr-brand" onClick={() => setOpen(null)}>
           <i><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinejoin="round" strokeLinecap="round"><path d="M3 11l9-7 9 7v9H3z" /><path d="M9 20v-6h6v6" /></svg></i>
-          <span><b>Ticket desk</b><small>AXA underwriting team</small></span>
+          <span><b>AXAlotl</b><small>Ticket desk · underwriting team</small></span>
         </button>
         <p className="jr-side-h">Queues</p>
         <nav>{QUEUES.map(([q, label]) => (

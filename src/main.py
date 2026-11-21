@@ -25,7 +25,7 @@ from uuid import uuid4
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from fastapi import FastAPI, Header, HTTPException  # noqa: E402
-from fastapi.responses import HTMLResponse  # noqa: E402
+from fastapi.responses import FileResponse, HTMLResponse  # noqa: E402
 from pydantic import BaseModel, Field  # noqa: E402
 
 from src import config  # noqa: E402
@@ -59,7 +59,7 @@ def health() -> dict:
         "llm_configured": bool(config.LLM_API_KEY),
         "models": {role: m or None for role, m in config.MODELS.items()},
         "streetview_configured": bool(config.GOOGLE_MAPS_API_KEY),
-        "access_code_required": bool(config.ACCESS_CODE),
+        "access_code_required": True,
         "cache": "upstash" if config.UPSTASH_REDIS_REST_URL else "file",
     }
 
@@ -69,12 +69,18 @@ def industries() -> list[dict]:
     return [{"key": k, "label": v[0]} for k, v in INDUSTRIES.items()]
 
 
+def require_access_code(value: str | None) -> None:
+    if not config.ACCESS_CODE:
+        raise HTTPException(503, "The assessment service needs an access code configured.")
+    if value != config.ACCESS_CODE:
+        raise HTTPException(401, "Invalid or missing access code (X-Access-Code header).")
+
+
 @app.post("/api/llm-input")
 def create_llm_input(req: LlmInputRequest, for_llm: bool = False,
                      x_access_code: str | None = Header(None)) -> dict:
     # The API spends OpenRouter + Google credits: on a public URL, require the team's access code.
-    if config.ACCESS_CODE and x_access_code != config.ACCESS_CODE:
-        raise HTTPException(401, "Invalid or missing access code (X-Access-Code header).")
+    require_access_code(x_access_code)
     from src.pipeline import InputError, ServiceError, for_llm_text, run
     try:
         doc = run(req.client_name, req.company_legal_name, req.address, req.industry_type, req.website)
@@ -101,8 +107,7 @@ _JOBS: dict[str, Path] = {}
 
 @app.post("/api/reports", status_code=202)
 def start_report(req: LlmInputRequest, x_access_code: str | None = Header(None)) -> dict:
-    if config.ACCESS_CODE and x_access_code != config.ACCESS_CODE:
-        raise HTTPException(401, "Invalid or missing access code (X-Access-Code header).")
+    require_access_code(x_access_code)
     from src.report import pipeline as report_pipeline
     slug = _re.sub(r"[^a-z0-9]+", "-", req.company_legal_name.lower()).strip("-")[:35] or "case"
     job_id = f"{slug}-{_time.strftime('%Y%m%d-%H%M%S')}-{uuid4().hex[:12]}"
@@ -125,6 +130,16 @@ def start_report(req: LlmInputRequest, x_access_code: str | None = Header(None))
 
     threading.Thread(target=run_job, daemon=True).start()
     return {"job_id": job_id}
+
+
+@app.get("/api/reports/{job_id}/photos/{name}")
+def building_photo(job_id: str, name: Literal["orthophoto.jpg", "facade_streetview.jpg"]) -> FileResponse:
+    if not _re.fullmatch(r"[a-z0-9-]{3,80}", job_id):
+        raise HTTPException(404)
+    path = REPORTS_DIR / job_id / "images" / name
+    if not path.is_file():
+        raise HTTPException(404)
+    return FileResponse(path, media_type="image/jpeg")
 
 
 @app.get("/api/reports/{job_id}")

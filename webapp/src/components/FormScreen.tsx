@@ -27,7 +27,7 @@ export default function FormScreen({ onSubmit, say, initial, serverError }: Prop
   const [idx, setIdx] = useState(-1)
   const [inds, setInds] = useState<Industry[] | null>(null)
   const [indsFailed, setIndsFailed] = useState(false)
-  const [needCode, setNeedCode] = useState(serverError?.kind === "code")
+  const [needCode, setNeedCode] = useState(!DEMO || serverError?.kind === "code")
   const coords = useRef<Coords | null>(initial?.coords ?? null)
   const picked = useRef<string>(initial?.picked ?? "")   // the address text chosen from the list (a free-typed text is not accepted)
   const seq = useRef(0)
@@ -170,7 +170,7 @@ export default function FormScreen({ onSubmit, say, initial, serverError }: Prop
       </div>
       <footer className="card-f">
         <button className="btn outline" type="button" onClick={demo}>Fill with the demo case</button>
-        <button className="btn" type="submit">Send request</button>
+        <button className="btn" type="submit" disabled={needCode && !code.trim()}>{needCode ? "Start assessment" : "Send request"}</button>
       </footer>
       </form>
     </section>

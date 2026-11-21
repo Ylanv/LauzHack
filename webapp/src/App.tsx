@@ -52,7 +52,6 @@ export default function App() {
   const [variant, setVariant] = useState<"A" | "B">(qp.get("ui") === "A" ? "A" : "B")   // B chosen by the team; ?ui=A keeps the satellite-window layout for comparison
   const [pause, setPause] = useState(qp.get("pause") !== "0")   // review mode: hold the map when it has finished processing
   const [held, setHeld] = useState(false)
-  const [job, setJob] = useState<string | null>(null)   // report job id: link to the underwriter dashboard (team review only)
   const pauseRef = useRef(pause); pauseRef.current = pause
   const run = useRef<any>(null)
   const coords = useRef<Coords>({ ...MOCK.coords })
@@ -68,7 +67,7 @@ export default function App() {
   const finish = useCallback(() => {
     setScreen("done"); setMood("happy"); say(MOCK.speech.done!)
     window.clearTimeout(moodTimer.current); moodTimer.current = window.setTimeout(() => setMood("idle"), 5000)
-    setLive("Your request has been sent")
+    setLive(DEMO ? "Your request has been sent" : "Your report is ready")
   }, [say])
 
   useEffect(() => { MapFlight.setVariant(variant) }, [variant])
@@ -83,7 +82,7 @@ export default function App() {
 
   const start = (i: RequestInput, c: Coords, accessCode: string, activityLabel: string) => {
     coords.current = c; setServerError(null)
-    setInput(i); setScreen("proc"); setMood("working"); setStepState({}); setCurrent("Starting"); setFade(false); setHeld(false); setJob(null)
+    setInput(i); setScreen("proc"); setMood("working"); setStepState({}); setCurrent("Starting"); setFade(false); setHeld(false)
     setActivity(activityLabel); setProgress(null)
     ;MapFlight.reset(); MapFlight.update({ step: "identity", progress: 0, coords: c })
     setLive("Preparing your file")
@@ -99,8 +98,12 @@ export default function App() {
           if (run.current !== r) return
           misses = 0
           setProgress(p)
+          if (p.done_stages.includes("features")) MapFlight.loadBuildingPhotos(id)
           r.etlDone = p.done_stages.includes("etl")
-          if (p.status === "succeeded") { r.live = "ok"; setJob(id) }
+          if (p.status === "succeeded") {
+            r.done = true
+            finish()
+          }
           else if (p.status === "running") setTimeout(() => poll(id), 1500)
           else fail(progressError(p))
         }).catch(() => { if (++misses >= 5) fail(new AssessError("service", "We lost the connection to the assessment service. Your details are kept, please try again.")); else setTimeout(() => poll(id), 2500) })
@@ -190,15 +193,15 @@ export default function App() {
       <div className="shell" style={{ visibility: screen === "proc" ? "hidden" : undefined }}>
         <header className="brand">
           <i><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinejoin="round" strokeLinecap="round"><path d="M3 11l9-7 9 7v9H3z" /><path d="M9 20v-6h6v6" /></svg></i>
-          Alpenmark<span>Building insurance</span>
+          AXAlotl<span>Building insurance</span>
         </header>
         <main>
           {screen === "form" && <FormScreen key={formKey} onSubmit={start} say={say} initial={formInit} serverError={serverError} />}
-          {screen === "done" && input && <DoneScreen input={input} activity={activity} onAgain={again} />}
+          {screen === "done" && input && <DoneScreen input={input} activity={activity} reportReady={!DEMO} onAgain={again} />}
         </main>
       </div>
       <Flight hidden={screen !== "proc"} fade={fade} skipped={skipped} onSkip={skip}>
-        <ReviewBar variant={variant} onVariant={setVariant} pause={pause} onPause={(v) => { setPause(v); if (!v && held) complete() }} held={held} onContinue={complete} reportHref={job ? `/dashboard.html?case=${encodeURIComponent(job)}` : undefined} />
+        {DEMO && <ReviewBar variant={variant} onVariant={setVariant} pause={pause} onPause={(v) => { setPause(v); if (!v && held) complete() }} held={held} onContinue={complete} />}
       </Flight>
       <Companion mood={mood} bubble={bubble.t} bubbleKey={bubble.n} status={status} />
     </>

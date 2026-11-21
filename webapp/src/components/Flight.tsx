@@ -18,7 +18,7 @@ export default function Flight({ hidden, fade, skipped, onSkip, children }: Prop
       <div id="map" ref={mapEl} aria-hidden="true" />
       <canvas id="stage" aria-hidden="true" ref={cvEl} />
       <h1 id="h-proc" className="vh" tabIndex={-1} ref={h}>Preparing your file</h1>
-      <header className="brand flightbrand"><i><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinejoin="round" strokeLinecap="round"><path d="M3 11l9-7 9 7v9H3z" /><path d="M9 20v-6h6v6" /></svg></i>Alpenmark</header>
+      <header className="brand flightbrand"><i><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinejoin="round" strokeLinecap="round"><path d="M3 11l9-7 9 7v9H3z" /><path d="M9 20v-6h6v6" /></svg></i>AXAlotl</header>
       {children}
     </div>
   )
