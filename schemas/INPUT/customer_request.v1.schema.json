@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "axa-smart-property/INPUT/customer_request.v1",
+  "title": "AXA Smart Property — customer request (INPUT, v1.0)",
+  "description": "Minimal information supplied by the customer/underwriter. Starts Mode A (full pipeline: ETL → report). Same fields as POST /api/llm-input.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "client_name", "company_legal_name", "building_address"],
+  "properties": {
+    "schema_version": { "const": "1.0-customer-request" },
+    "case_id": { "type": ["string", "null"], "pattern": "^[a-z0-9][a-z0-9_-]{1,63}$",
+                 "description": "Optional stable case id; derived from the company name when absent." },
+    "client_name": { "type": "string", "minLength": 1 },
+    "company_legal_name": { "type": "string", "minLength": 1, "description": "Exact name in the commercial register (Zefix)." },
+    "building_address": { "type": "string", "minLength": 5, "description": "Building address in the canton of Geneva: 'Street N, NPA Locality'." },
+    "industry_type": { "type": ["string", "null"], "description": "Declared industry key (GET /api/industries), optional." },
+    "requested_coverages": { "type": ["array", "null"], "items": { "type": "string" }, "description": "Optional; recorded, never inferred." },
+    "website": { "type": ["string", "null"], "description": "Optional technical hint (company website)." }
+  }
+}

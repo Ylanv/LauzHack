@@ -9,7 +9,7 @@ from pathlib import Path
 
 from jsonschema import Draft202012Validator
 
-SCHEMA = Path(__file__).resolve().parent.parent / "schemas" / "llm_input.schema.json"
+SCHEMA = Path(__file__).resolve().parent.parent / "schemas" / "FEATURE" / "llm_input.v2.schema.json"
 
 
 def validate(doc: dict) -> list[str]:

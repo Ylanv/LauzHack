@@ -1,0 +1,133 @@
+{
+  "_doc": "Benchmark configs. Model IDs pinned. price_usd_per_mtok copied from models/catalog.json (verified 2026-11-21). A config without a price cannot make paid calls. status: confirmed | alternate | test-only.",
+  "configs": {
+    "mock": {
+      "provider": "mock",
+      "model": "mock-minimal",
+      "status": "test-only",
+      "price_usd_per_mtok": {
+        "input": 0,
+        "output": 0
+      }
+    },
+    "claude_opus55": {
+      "provider": "anthropic",
+      "model": "claude-opus-5-5",
+      "status": "confirmed",
+      "tier": "frontier",
+      "effort": "medium",
+      "max_tokens": 32000,
+      "expected_output_tokens": 9000,
+      "price_usd_per_mtok": {
+        "input": 4,
+        "output": 20,
+        "cache_write": 5,
+        "cache_read": 0.2
+      },
+      "notes": "thinking cannot be disabled on Opus 5.5 (adaptive); effort set explicitly",
+      "confirmed_at": "2026-11-21 (Lead/user)",
+      "reference_usd_per_case": 0.234,
+      "reference_source": "pilot1 per-case actual (Lead, 2026-11-21)"
+    },
+    "claude_haiku55": {
+      "provider": "anthropic",
+      "model": "claude-haiku-5-5",
+      "status": "confirmed",
+      "tier": "cheap",
+      "effort": "medium",
+      "max_tokens": 32000,
+      "expected_output_tokens": 32000,
+      "price_usd_per_mtok": {
+        "input": 0.1,
+        "output": 0.5,
+        "cache_write": 0.125,
+        "cache_read": 0.01
+      },
+      "notes": "price valid for prompts <=100k tokens (ours ~11k)",
+      "confirmed_at": "2026-11-21 (Lead/user)",
+      "reference_usd_per_case": 0.019,
+      "reference_source": "pilot1 per-case actual (Lead, 2026-11-21)"
+    },
+    "together_deepseek_v4pro": {
+      "provider": "together",
+      "model": "deepseek-ai/DeepSeek-V4-Pro-0813",
+      "status": "confirmed",
+      "tier": "open-mid",
+      "structured": "json_schema",
+      "temperature": 0,
+      "max_tokens": 32000,
+      "expected_output_tokens": 10000,
+      "price_usd_per_mtok": {
+        "input": 1.32,
+        "output": 3.96,
+        "cache_read": 0.13
+      },
+      "confirmed_at": "2026-11-21 (Lead/user)",
+      "reference_usd_per_case": 0.073,
+      "reference_source": "pilot1 per-case actual (Lead, 2026-11-21)"
+    },
+    "openrouter_gemini35flash": {
+      "provider": "openrouter",
+      "model": "google/gemini-3.5-flash",
+      "status": "confirmed",
+      "tier": "closed-mid",
+      "structured": "json_schema",
+      "temperature": 0,
+      "max_tokens": 32000,
+      "expected_output_tokens": 12000,
+      "price_usd_per_mtok": {
+        "input": 1.5,
+        "output": 9.0,
+        "cache_read": 0.15
+      },
+      "notes": "actual cost taken from OpenRouter usage.cost",
+      "confirmed_at": "2026-11-21 (Lead/user)",
+      "reference_usd_per_case": 0.125,
+      "reference_source": "pilot1 per-case actual (Lead, 2026-11-21)"
+    },
+    "alt_claude_sonnet55": {
+      "provider": "anthropic",
+      "model": "claude-sonnet-5-5",
+      "status": "alternate",
+      "tier": "mid",
+      "effort": "medium",
+      "max_tokens": 32000,
+      "expected_output_tokens": 5000,
+      "price_usd_per_mtok": {
+        "input": 2,
+        "output": 10,
+        "cache_write": 2.5,
+        "cache_read": 0.1
+      }
+    },
+    "alt_together_glm53": {
+      "provider": "together",
+      "model": "zai-org/GLM-5.3",
+      "status": "alternate",
+      "tier": "open-mid",
+      "structured": "json_schema",
+      "temperature": 0,
+      "max_tokens": 32000,
+      "expected_output_tokens": 5000,
+      "price_usd_per_mtok": {
+        "input": 1.4,
+        "output": 4.4,
+        "cache_read": 0.26
+      }
+    },
+    "alt_openrouter_gpt61terra": {
+      "provider": "openrouter",
+      "model": "openai/gpt-6.1-terra",
+      "status": "alternate",
+      "tier": "closed-mid",
+      "structured": "json_schema",
+      "max_tokens": 32000,
+      "expected_output_tokens": 5000,
+      "price_usd_per_mtok": {
+        "input": 1.0,
+        "output": 5.0,
+        "cache_read": 0.05
+      }
+    }
+  }
+}

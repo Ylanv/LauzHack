@@ -1,0 +1,569 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "1.0"
+    },
+    "case_id": {
+      "type": "string"
+    },
+    "executive_summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "headline": {
+          "type": "string",
+          "maxLength": 150
+        },
+        "overview": {
+          "type": "string",
+          "maxLength": 700
+        },
+        "underwriting_readiness": {
+          "type": "string",
+          "enum": [
+            "ready_for_initial_review",
+            "requires_clarification",
+            "specialist_review_recommended",
+            "building_identity_unresolved"
+          ]
+        },
+        "key_takeaway": {
+          "type": "string",
+          "maxLength": 300
+        },
+        "critical_fact_ids": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 25
+        }
+      },
+      "required": [
+        "headline",
+        "overview",
+        "underwriting_readiness",
+        "key_takeaway",
+        "critical_fact_ids"
+      ]
+    },
+    "cope": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "construction": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "headline": {
+              "type": "string",
+              "maxLength": 110
+            },
+            "interpretation": {
+              "type": "string",
+              "maxLength": 600
+            },
+            "fact_ids": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "maxItems": 25
+            },
+            "evidence_ids": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "maxItems": 25
+            },
+            "unknown_feature_ids": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "maxItems": 25
+            }
+          },
+          "required": [
+            "headline",
+            "interpretation",
+            "fact_ids",
+            "evidence_ids",
+            "unknown_feature_ids"
+          ]
+        },
+        "occupancy": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "headline": {
+              "type": "string",
+              "maxLength": 110
+            },
+            "interpretation": {
+              "type": "string",
+              "maxLength": 600
+            },
+            "fact_ids": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "maxItems": 25
+            },
+            "evidence_ids": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "maxItems": 25
+            },
+            "unknown_feature_ids": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "maxItems": 25
+            }
+          },
+          "required": [
+            "headline",
+            "interpretation",
+            "fact_ids",
+            "evidence_ids",
+            "unknown_feature_ids"
+          ]
+        },
+        "protection": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "headline": {
+              "type": "string",
+              "maxLength": 110
+            },
+            "interpretation": {
+              "type": "string",
+              "maxLength": 600
+            },
+            "fact_ids": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "maxItems": 25
+            },
+            "evidence_ids": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "maxItems": 25
+            },
+            "unknown_feature_ids": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "maxItems": 25
+            }
+          },
+          "required": [
+            "headline",
+            "interpretation",
+            "fact_ids",
+            "evidence_ids",
+            "unknown_feature_ids"
+          ]
+        },
+        "exposure": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "headline": {
+              "type": "string",
+              "maxLength": 110
+            },
+            "interpretation": {
+              "type": "string",
+              "maxLength": 600
+            },
+            "fact_ids": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "maxItems": 25
+            },
+            "evidence_ids": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "maxItems": 25
+            },
+            "unknown_feature_ids": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "maxItems": 25
+            }
+          },
+          "required": [
+            "headline",
+            "interpretation",
+            "fact_ids",
+            "evidence_ids",
+            "unknown_feature_ids"
+          ]
+        }
+      },
+      "required": [
+        "construction",
+        "occupancy",
+        "protection",
+        "exposure"
+      ]
+    },
+    "priority_findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "maxLength": 50
+          },
+          "title": {
+            "type": "string",
+            "maxLength": 120
+          },
+          "priority": {
+            "type": "string",
+            "enum": [
+              "critical",
+              "high",
+              "medium",
+              "low"
+            ]
+          },
+          "finding_type": {
+            "type": "string",
+            "enum": [
+              "confirmed_exposure",
+              "potential_exposure",
+              "protective_factor",
+              "data_gap",
+              "source_conflict"
+            ]
+          },
+          "observation": {
+            "type": "string",
+            "maxLength": 420
+          },
+          "underwriting_implication": {
+            "type": "string",
+            "maxLength": 480
+          },
+          "recommended_action": {
+            "type": "string",
+            "maxLength": 280
+          },
+          "confidence": {
+            "type": "string",
+            "enum": [
+              "high",
+              "medium",
+              "low"
+            ]
+          },
+          "fact_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 25
+          },
+          "evidence_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 25
+          },
+          "coverage_components": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "fire",
+                "regulated_natural_hazards",
+                "earthquake_optional",
+                "water_optional",
+                "glass_optional",
+                "other_optional"
+              ]
+            },
+            "maxItems": 6
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "priority",
+          "finding_type",
+          "observation",
+          "underwriting_implication",
+          "recommended_action",
+          "confidence",
+          "fact_ids",
+          "evidence_ids",
+          "coverage_components"
+        ]
+      },
+      "maxItems": 6
+    },
+    "hazard_interpretations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "peril": {
+            "type": "string",
+            "enum": [
+              "fire",
+              "river_flood",
+              "surface_runoff",
+              "earthquake",
+              "hail",
+              "windstorm",
+              "landslide",
+              "rockfall",
+              "avalanche",
+              "snow_load",
+              "water_escape",
+              "other"
+            ]
+          },
+          "interpretation": {
+            "type": "string",
+            "maxLength": 380
+          },
+          "pricing_role": {
+            "type": "string",
+            "enum": [
+              "potential_individual_pricing_input",
+              "regulated_component_underwriting_only",
+              "coverage_dependent",
+              "not_assessed"
+            ]
+          },
+          "fact_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 25
+          },
+          "evidence_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 25
+          },
+          "follow_up_needed": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "peril",
+          "interpretation",
+          "pricing_role",
+          "fact_ids",
+          "evidence_ids",
+          "follow_up_needed"
+        ]
+      },
+      "maxItems": 14
+    },
+    "valuation_commentary": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "reconstruction_value_comment": {
+          "type": "string",
+          "maxLength": 360
+        },
+        "market_value_comment": {
+          "type": "string",
+          "maxLength": 250
+        },
+        "missing_valuation_inputs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 25
+        },
+        "fact_ids": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 25
+        }
+      },
+      "required": [
+        "reconstruction_value_comment",
+        "market_value_comment",
+        "missing_valuation_inputs",
+        "fact_ids"
+      ]
+    },
+    "visual_evidence": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "visual_id": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string",
+            "maxLength": 90
+          },
+          "caption": {
+            "type": "string",
+            "maxLength": 350
+          },
+          "underwriting_relevance": {
+            "type": "string",
+            "maxLength": 340
+          },
+          "annotation_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 25
+          },
+          "fact_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 25
+          }
+        },
+        "required": [
+          "visual_id",
+          "title",
+          "caption",
+          "underwriting_relevance",
+          "annotation_ids",
+          "fact_ids"
+        ]
+      },
+      "maxItems": 4
+    },
+    "open_questions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "maxLength": 50
+          },
+          "priority": {
+            "type": "string",
+            "enum": [
+              "critical",
+              "high",
+              "medium",
+              "low"
+            ]
+          },
+          "question": {
+            "type": "string",
+            "maxLength": 250
+          },
+          "reason_for_underwriter": {
+            "type": "string",
+            "maxLength": 360
+          },
+          "expected_answer_or_document": {
+            "type": "string",
+            "maxLength": 240
+          },
+          "target": {
+            "type": "string",
+            "enum": [
+              "client",
+              "internal_axa",
+              "risk_engineer",
+              "valuation_expert"
+            ]
+          },
+          "feature_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 25
+          },
+          "trigger_finding_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 25
+          },
+          "blocking_initial_pricing": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "priority",
+          "question",
+          "reason_for_underwriter",
+          "expected_answer_or_document",
+          "target",
+          "feature_ids",
+          "trigger_finding_ids",
+          "blocking_initial_pricing"
+        ]
+      },
+      "maxItems": 8
+    },
+    "underwriter_next_step": {
+      "type": "string",
+      "maxLength": 500
+    }
+  },
+  "required": [
+    "schema_version",
+    "case_id",
+    "executive_summary",
+    "cope",
+    "priority_findings",
+    "hazard_interpretations",
+    "valuation_commentary",
+    "visual_evidence",
+    "open_questions",
+    "underwriter_next_step"
+  ],
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "AXA Smart Property — LLM Underwriting Narrative Output",
+  "description": "The model returns analytical text and references to immutable facts/evidence, never raw fetched data or embedded images. Fields are renderer-controlled outside this object."
+}

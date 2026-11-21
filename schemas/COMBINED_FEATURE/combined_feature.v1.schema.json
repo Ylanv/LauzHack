@@ -1,0 +1,397 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "1.0"
+    },
+    "case": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "case_id": {
+          "type": "string"
+        },
+        "client_name": {
+          "type": "string"
+        },
+        "legal_company_name": {
+          "type": "string"
+        },
+        "building_address": {
+          "type": "string"
+        },
+        "created_at": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "case_id",
+        "client_name",
+        "legal_company_name",
+        "building_address",
+        "created_at"
+      ]
+    },
+    "building": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "egid": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "company_uid": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "canton": {
+          "type": "string"
+        },
+        "identity_resolution": {
+          "type": "string",
+          "enum": [
+            "unique",
+            "ambiguous",
+            "not_found"
+          ]
+        }
+      },
+      "required": [
+        "egid",
+        "company_uid",
+        "canton",
+        "identity_resolution"
+      ]
+    },
+    "coverage_context": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "jurisdiction": {
+          "const": "CH-GE"
+        },
+        "candidate_components": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "fire",
+              "regulated_natural_hazards",
+              "earthquake_optional",
+              "water_optional",
+              "glass_optional",
+              "other_optional"
+            ]
+          }
+        }
+      },
+      "required": [
+        "jurisdiction",
+        "candidate_components"
+      ]
+    },
+    "facts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "field_key": {
+            "type": "string"
+          },
+          "value": {
+            "type": [
+              "string",
+              "number",
+              "integer",
+              "boolean",
+              "null",
+              "object",
+              "array"
+            ]
+          },
+          "unit": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "evidence_status": {
+            "type": "string",
+            "enum": [
+              "official_record",
+              "site_specific_document",
+              "company_level_document",
+              "visual_observation",
+              "derived_estimate",
+              "unknown",
+              "conflicting"
+            ]
+          },
+          "site_scope": {
+            "type": "string",
+            "enum": [
+              "building",
+              "industrial_site",
+              "company",
+              "neighborhood",
+              "canton",
+              "unknown"
+            ]
+          },
+          "source_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 25
+          },
+          "valid_as_of": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "confidence": {
+            "type": "string",
+            "enum": [
+              "high",
+              "medium",
+              "low"
+            ]
+          },
+          "method": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "field_key",
+          "value",
+          "unit",
+          "evidence_status",
+          "site_scope",
+          "source_ids",
+          "valid_as_of",
+          "confidence",
+          "method"
+        ]
+      }
+    },
+    "visuals": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "aerial_orthophoto",
+              "hazard_overlay",
+              "company_photo",
+              "public_document_figure",
+              "site_plan"
+            ]
+          },
+          "asset_uri": {
+            "type": "string"
+          },
+          "source_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 25
+          },
+          "captured_or_published_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "annotation_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 25
+          },
+          "annotations": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "label": {
+                  "type": "string"
+                },
+                "geometry_type": {
+                  "type": "string",
+                  "enum": [
+                    "polygon",
+                    "bounding_box",
+                    "point",
+                    "line",
+                    "raster_overlay"
+                  ]
+                },
+                "coordinates_or_bbox": {
+                  "type": "array",
+                  "items": {
+                    "type": "number"
+                  }
+                },
+                "linked_fact_ids": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "maxItems": 25
+                },
+                "provenance": {
+                  "type": "string",
+                  "enum": [
+                    "geospatial_geometry",
+                    "source_label",
+                    "vision_candidate",
+                    "human_annotation"
+                  ]
+                },
+                "confidence": {
+                  "type": "string",
+                  "enum": [
+                    "high",
+                    "medium",
+                    "low"
+                  ]
+                }
+              },
+              "required": [
+                "id",
+                "label",
+                "geometry_type",
+                "coordinates_or_bbox",
+                "linked_fact_ids",
+                "provenance",
+                "confidence"
+              ]
+            }
+          },
+          "alt_text": {
+            "type": "string"
+          },
+          "building_egid": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "asset_uri",
+          "source_ids",
+          "captured_or_published_at",
+          "annotation_ids",
+          "annotations",
+          "alt_text",
+          "building_egid"
+        ]
+      }
+    },
+    "sources": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "provider": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "url": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "publication_date": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "retrieved_at": {
+            "type": "string"
+          },
+          "usage_or_attribution": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "provider",
+          "title",
+          "url",
+          "publication_date",
+          "retrieved_at",
+          "usage_or_attribution"
+        ]
+      }
+    },
+    "unknown_feature_ids": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 25
+    },
+    "quality_flags": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "required": [
+    "schema_version",
+    "case",
+    "building",
+    "coverage_context",
+    "facts",
+    "visuals",
+    "sources",
+    "unknown_feature_ids",
+    "quality_flags"
+  ],
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "AXA Smart Property — Validated Evidence Bundle Input",
+  "description": "Normalized, validated, compact evidence bundle. Adapted from upstream schema 2.0-llm-input. Facts may contain JSON arrays and objects; no raw source dumps."
+}

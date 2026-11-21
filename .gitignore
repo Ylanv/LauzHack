@@ -9,3 +9,6 @@ probe_out/
 .vercel
 .env*
 photos_test/
+
+# Synthetic benchmark dataset: local only, never pushed
+dataset/

@@ -1,0 +1,200 @@
+{
+  "schema_version": "1.0",
+  "case_id": "DEMO-GE-001",
+  "executive_summary": {
+    "headline": "Preliminary review: flood mapping and industrial activity warrant follow-up",
+    "overview": "Synthetic example: a mapped flood zone intersects the identified building footprint. The legal entity reports metalworking, but activity at the insured building and its fire protections are not verified.",
+    "underwriting_readiness": "requires_clarification",
+    "key_takeaway": "Verify the operating activity, fire-protection arrangements and replacement value before pricing.",
+    "critical_fact_ids": [
+      "F02",
+      "F03",
+      "F04",
+      "F05"
+    ]
+  },
+  "cope": {
+    "construction": {
+      "headline": "Construction record available",
+      "interpretation": "The building record gives a construction year, but not enough verified structural information for a full assessment.",
+      "fact_ids": [
+        "F01"
+      ],
+      "evidence_ids": [],
+      "unknown_feature_ids": []
+    },
+    "occupancy": {
+      "headline": "Metalworking disclosed at company level",
+      "interpretation": "Company-level metalworking is relevant to fire exposure but must not be attributed to this specific building without evidence.",
+      "fact_ids": [
+        "F02"
+      ],
+      "evidence_ids": [],
+      "unknown_feature_ids": []
+    },
+    "protection": {
+      "headline": "Fire protections unverified",
+      "interpretation": "No verified sprinkler information is available; absence cannot be inferred.",
+      "fact_ids": [
+        "F03"
+      ],
+      "evidence_ids": [],
+      "unknown_feature_ids": [
+        "F03"
+      ]
+    },
+    "exposure": {
+      "headline": "Mapped flood exposure",
+      "interpretation": "A synthetic GIS layer intersects the identified footprint. Validate the specific peril, legend and map currency before underwriting use.",
+      "fact_ids": [
+        "F05"
+      ],
+      "evidence_ids": [
+        "VIS01"
+      ],
+      "unknown_feature_ids": []
+    }
+  },
+  "priority_findings": [
+    {
+      "id": "FIND01",
+      "title": "Potential site-level fire process uncertainty",
+      "priority": "high",
+      "finding_type": "potential_exposure",
+      "observation": "Metalworking is described at company level only.",
+      "underwriting_implication": "Industrial thermal processes cannot be assumed present at the insured building.",
+      "recommended_action": "Ask for a description of actual operations at the insured address.",
+      "confidence": "medium",
+      "fact_ids": [
+        "F02"
+      ],
+      "evidence_ids": [],
+      "coverage_components": [
+        "fire"
+      ]
+    },
+    {
+      "id": "FIND02",
+      "title": "Mapped flood exposure",
+      "priority": "high",
+      "finding_type": "confirmed_exposure",
+      "observation": "The synthetic GIS flood layer intersects the building footprint.",
+      "underwriting_implication": "Review prevention and any special extensions; do not apply a location multiplier to the regulated natural-hazards tariff.",
+      "recommended_action": "Review the published hazard layer and building vulnerability.",
+      "confidence": "high",
+      "fact_ids": [
+        "F05"
+      ],
+      "evidence_ids": [
+        "VIS01"
+      ],
+      "coverage_components": [
+        "regulated_natural_hazards"
+      ]
+    },
+    {
+      "id": "FIND03",
+      "title": "Reconstruction value missing",
+      "priority": "critical",
+      "finding_type": "data_gap",
+      "observation": "No defensible replacement-cost value is supplied.",
+      "underwriting_implication": "The building sum insured cannot be validated.",
+      "recommended_action": "Obtain an approved valuation or sufficiently documented cost estimate.",
+      "confidence": "high",
+      "fact_ids": [
+        "F04"
+      ],
+      "evidence_ids": [],
+      "coverage_components": [
+        "fire",
+        "regulated_natural_hazards"
+      ]
+    }
+  ],
+  "hazard_interpretations": [
+    {
+      "peril": "river_flood",
+      "interpretation": "Synthetic mapped flood exposure; verify the official layer and vulnerability separately.",
+      "pricing_role": "regulated_component_underwriting_only",
+      "fact_ids": [
+        "F05"
+      ],
+      "evidence_ids": [
+        "VIS01"
+      ],
+      "follow_up_needed": true
+    }
+  ],
+  "valuation_commentary": {
+    "reconstruction_value_comment": "No defensible reconstruction value is available; do not display a CHF estimate.",
+    "market_value_comment": "A market-price estimate is not needed for the initial building-only assessment.",
+    "missing_valuation_inputs": [
+      "F04"
+    ],
+    "fact_ids": [
+      "F04"
+    ]
+  },
+  "visual_evidence": [
+    {
+      "visual_id": "VIS01",
+      "title": "Synthetic mapped flood overlay",
+      "caption": "The building footprint intersects a synthetic flood polygon (illustration only).",
+      "underwriting_relevance": "Highlights why geospatial exposure should be reviewed without inferring insured flood damage.",
+      "annotation_ids": [
+        "ANN01"
+      ],
+      "fact_ids": [
+        "F05"
+      ]
+    }
+  ],
+  "open_questions": [
+    {
+      "id": "Q01",
+      "priority": "critical",
+      "question": "What is the validated reconstruction value of this building?",
+      "reason_for_underwriter": "Needed to confirm the insured sum and exposure.",
+      "expected_answer_or_document": "Current valuation report or documented rebuilding cost calculation.",
+      "target": "valuation_expert",
+      "feature_ids": [
+        "F04"
+      ],
+      "trigger_finding_ids": [
+        "FIND03"
+      ],
+      "blocking_initial_pricing": true
+    },
+    {
+      "id": "Q02",
+      "priority": "high",
+      "question": "What industrial activities take place specifically at this address?",
+      "reason_for_underwriter": "Company-wide activity is not proof of the building occupancy or fire processes.",
+      "expected_answer_or_document": "Site occupancy statement or site-specific technical description.",
+      "target": "client",
+      "feature_ids": [
+        "F02"
+      ],
+      "trigger_finding_ids": [
+        "FIND01"
+      ],
+      "blocking_initial_pricing": true
+    },
+    {
+      "id": "Q03",
+      "priority": "high",
+      "question": "Are automatic sprinklers present and maintained?",
+      "reason_for_underwriter": "Protection measures can materially affect fire-loss severity and underwriting.",
+      "expected_answer_or_document": "System certificate or inspection record.",
+      "target": "client",
+      "feature_ids": [
+        "F03"
+      ],
+      "trigger_finding_ids": [
+        "FIND01"
+      ],
+      "blocking_initial_pricing": false
+    }
+  ],
+  "underwriter_next_step": "Clarify building usage and protection; obtain a defensible reconstruction valuation, and validate the official flood layer before quotation."
+}
