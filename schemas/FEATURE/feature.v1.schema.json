@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "axa-smart-property/FEATURE/feature.v1",
+  "title": "AXA Smart Property — extracted features (FEATURE, v1.0)",
+  "description": "Flat list of the 19 ETL features, each joined with its evidence (feature_evidence) — written as features.json by the report pipeline. Derived deterministically from the ETL document llm_input.v2 (schema llm_input.v2.schema.json in this folder), never edited by an LLM.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "case_id", "source_document", "features"],
+  "properties": {
+    "schema_version": { "const": "1.0-features" },
+    "case_id": { "type": "string" },
+    "source_document": { "type": "string", "description": "schema_version of the ETL document the features were read from (2.0-llm-input)." },
+    "features": {
+      "type": "array",
+      "minItems": 19,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["feature", "fact_id", "value", "status", "requires_verification", "source_ids", "note"],
+        "properties": {
+          "feature": { "enum": ["reconstruction_value_chf", "building_usage", "construction_material", "construction_year", "floor_area_m2",
+                                "number_of_floors", "roof_type_material", "building_renovations", "business_sector",
+                                "site_industrial_processes", "high_temperature_operations", "gas_installations",
+                                "flammable_material_storage", "earthquake_exposure", "flood_exposure", "surface_runoff_exposure",
+                                "hail_exposure", "landslide_exposure", "potential_repair_needs"] },
+          "fact_id": { "type": "string", "pattern": "^feat\\.[a-z0-9_]+$", "description": "ID of the same fact in COMBINED_FEATURE and in the report." },
+          "value": { "description": "Unchanged ETL value (scalar, object or array); null when unknown." },
+          "status": { "enum": ["verified", "observed", "inferred", "declared", "estimated", "unknown"] },
+          "requires_verification": { "type": "boolean" },
+          "source_ids": { "type": "array", "items": { "type": "string", "pattern": "^src_\\d+$" } },
+          "note": { "type": ["string", "null"] }
+        }
+      }
+    }
+  }
+}

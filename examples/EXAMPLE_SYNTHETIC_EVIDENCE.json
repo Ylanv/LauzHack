@@ -1,0 +1,167 @@
+{
+  "schema_version": "1.0",
+  "case": {
+    "case_id": "DEMO-GE-001",
+    "client_name": "Example Contact",
+    "legal_company_name": "Example Industries SA",
+    "building_address": "Example Street 12, Geneva (fictional)",
+    "created_at": "2026-11-21"
+  },
+  "building": {
+    "egid": "SYNTHETIC-EGID-001",
+    "company_uid": null,
+    "canton": "GE",
+    "identity_resolution": "unique"
+  },
+  "coverage_context": {
+    "jurisdiction": "CH-GE",
+    "candidate_components": [
+      "fire",
+      "regulated_natural_hazards",
+      "earthquake_optional",
+      "water_optional"
+    ]
+  },
+  "facts": [
+    {
+      "id": "F01",
+      "field_key": "construction_year",
+      "value": 1990,
+      "unit": null,
+      "evidence_status": "official_record",
+      "site_scope": "building",
+      "source_ids": [
+        "SRC01"
+      ],
+      "valid_as_of": null,
+      "confidence": "high",
+      "method": "synthetic demo RegBL result"
+    },
+    {
+      "id": "F02",
+      "field_key": "activity",
+      "value": "metalworking (company-level only)",
+      "unit": null,
+      "evidence_status": "company_level_document",
+      "site_scope": "company",
+      "source_ids": [
+        "SRC02"
+      ],
+      "valid_as_of": null,
+      "confidence": "medium",
+      "method": "synthetic example source excerpt"
+    },
+    {
+      "id": "F03",
+      "field_key": "sprinklers",
+      "value": null,
+      "unit": null,
+      "evidence_status": "unknown",
+      "site_scope": "unknown",
+      "source_ids": [],
+      "valid_as_of": null,
+      "confidence": "low",
+      "method": null
+    },
+    {
+      "id": "F04",
+      "field_key": "reconstruction_value_chf",
+      "value": null,
+      "unit": "CHF",
+      "evidence_status": "unknown",
+      "site_scope": "building",
+      "source_ids": [],
+      "valid_as_of": null,
+      "confidence": "low",
+      "method": null
+    },
+    {
+      "id": "F05",
+      "field_key": "flood_hazard_zone",
+      "value": "mapped flood-hazard polygon intersects footprint (synthetic)",
+      "unit": null,
+      "evidence_status": "official_record",
+      "site_scope": "building",
+      "source_ids": [
+        "SRC03"
+      ],
+      "valid_as_of": null,
+      "confidence": "high",
+      "method": "synthetic GIS intersection"
+    }
+  ],
+  "visuals": [
+    {
+      "id": "VIS01",
+      "kind": "hazard_overlay",
+      "asset_uri": "demo-assets/flood_map_placeholder.png",
+      "source_ids": [
+        "SRC03"
+      ],
+      "captured_or_published_at": null,
+      "annotation_ids": [
+        "ANN01"
+      ],
+      "annotations": [
+        {
+          "id": "ANN01",
+          "label": "Building footprint intersects mapped flood area",
+          "geometry_type": "polygon",
+          "coordinates_or_bbox": [
+            0,
+            0,
+            1,
+            0,
+            1,
+            1,
+            0,
+            1
+          ],
+          "linked_fact_ids": [
+            "F05"
+          ],
+          "provenance": "geospatial_geometry",
+          "confidence": "high"
+        }
+      ],
+      "alt_text": "Synthetic GIS flood overlay placeholder, not a real Geneva map",
+      "building_egid": "SYNTHETIC-EGID-001"
+    }
+  ],
+  "sources": [
+    {
+      "id": "SRC01",
+      "provider": "Demo RegBL",
+      "title": "Synthetic building record",
+      "url": null,
+      "publication_date": null,
+      "retrieved_at": "2026-11-21",
+      "usage_or_attribution": "SYNTHETIC EXAMPLE ONLY"
+    },
+    {
+      "id": "SRC02",
+      "provider": "Demo company",
+      "title": "Synthetic process description",
+      "url": null,
+      "publication_date": null,
+      "retrieved_at": "2026-11-21",
+      "usage_or_attribution": "SYNTHETIC EXAMPLE ONLY"
+    },
+    {
+      "id": "SRC03",
+      "provider": "Demo GIS",
+      "title": "Synthetic mapped flood layer",
+      "url": null,
+      "publication_date": null,
+      "retrieved_at": "2026-11-21",
+      "usage_or_attribution": "SYNTHETIC EXAMPLE ONLY"
+    }
+  ],
+  "unknown_feature_ids": [
+    "F03",
+    "F04"
+  ],
+  "quality_flags": [
+    "Synthetic demo, not usable for real underwriting"
+  ]
+}

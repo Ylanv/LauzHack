@@ -24,7 +24,8 @@ ON_VERCEL = bool(os.environ.get("VERCEL"))
 
 # --- LLM provider (any OpenAI-compatible API: OpenRouter, Together, Nebius Token Factory) ---
 LLM_BASE_URL = os.environ.get("LLM_BASE_URL", "https://openrouter.ai/api/v1")
-LLM_API_KEY = os.environ.get("LLM_API_KEY", "")
+LLM_API_KEY = os.environ.get("LLM_API_KEY", "") or (
+    os.environ.get("OPENROUTER_API_KEY", "") if "openrouter.ai" in LLM_BASE_URL else "")  # same OpenRouter key as the report step
 
 MODELS = {
     "vision": os.environ.get("MODEL_VISION", ""),          # orthophoto, facade, website photos
