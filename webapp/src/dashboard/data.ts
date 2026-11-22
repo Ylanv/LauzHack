@@ -12,16 +12,47 @@ export interface CaseData {
   files: string[]                              // known files (folder picker) — [] for the dev API
 }
 
-const getJson = async (u: string) => { try { const r = await fetch(u, { cache: "no-store" }); return r.ok ? await r.json() : null } catch { return null } }
 
-/** Dev: folders served by the Vite plugin (webapp/vite.config.ts) from ../reports */
+const CODE_KEY = "axalotl_access_code"
+let asked = false
+const storedCode = () => { try { return localStorage.getItem(CODE_KEY) || "" } catch { return "" } }
+
+/** Online (Vercel): reports stored by the backend (GET /api/cases, private Blob store), behind the team's access code.
+ *  The code is asked once and kept in this browser; the backend also sets a cookie so that case photos load. */
+async function caseIds(): Promise<{ ids: string[]; base: "dev" | "api" } | null> {
+  try { const r = await fetch("/reports-api/cases", { cache: "no-store" }); if (r.ok) return { ids: await r.json(), base: "dev" } } catch { /* not the dev server */ }
+  for (let attempt = 0; attempt < 2; attempt++) {
+    let code = storedCode()
+    if (!code && !asked) { asked = true; code = (prompt("Access code of the underwriting team") || "").trim(); try { localStorage.setItem(CODE_KEY, code) } catch { /* private mode */ } }
+    if (!code) return null
+    let r: Response
+    try { r = await fetch("/api/cases", { cache: "no-store", headers: { "X-Access-Code": code } }) } catch { return null }
+    if (r.ok) return { ids: await r.json(), base: "api" }
+    if (r.status !== 401) return null
+    try { localStorage.removeItem(CODE_KEY) } catch { /* ignore */ }
+    if (asked) return null
+  }
+  return null
+}
+
+const loaded = new Map<string, CaseData>()   // finished cases do not change: fetched once per page load
+
+/** Report folders: dev → Vite plugin (webapp/vite.config.ts, ../reports + ../examples/reports); online → backend API */
 export async function loadFromApi(): Promise<CaseData[] | null> {
-  let ids: string[]
-  try { const r = await fetch("/reports-api/cases", { cache: "no-store" }); if (!r.ok) return null; ids = await r.json() } catch { return null }
-  return Promise.all(ids.map(async (id) => {
-    const f = (p: string) => `/reports-api/files/${encodeURIComponent(id)}/${p.split("/").map(encodeURIComponent).join("/")}`
-    const [output, bundle, metrics, validation] = await Promise.all(["output.json", "features_combined.json", "metrics.json", "validation.json"].map((p) => getJson(f(p))))
-    return { id, output, bundle, metrics, validation, url: f, files: [] }
+  const found = await caseIds()
+  if (!found) return null
+  const prefix = found.base === "dev" ? "/reports-api/files" : "/api/cases"
+  const mid = found.base === "dev" ? "" : "/files"
+  const headers: Record<string, string> = found.base === "api" ? { "X-Access-Code": storedCode() } : {}
+  const getCase = async (u: string) => { try { const r = await fetch(u, found.base === "dev" ? { cache: "no-store" } : { headers }); return r.ok ? await r.json() : null } catch { return null } }
+  return Promise.all(found.ids.map(async (id) => {
+    const cached = loaded.get(id)
+    if (cached) return cached
+    const f = (p: string) => `${prefix}/${encodeURIComponent(id)}${mid}/${p.split("/").map(encodeURIComponent).join("/")}`
+    const [output, bundle, metrics, validation] = await Promise.all(["output.json", "features_combined.json", "metrics.json", "validation.json"].map((p) => getCase(f(p))))
+    const c: CaseData = { id, output, bundle, metrics, validation, url: f, files: [] }
+    if (found.base === "api" && metrics && metrics.status !== "running") loaded.set(id, c)
+    return c
   }))
 }
 

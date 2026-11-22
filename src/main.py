@@ -24,8 +24,8 @@ from uuid import uuid4
 # Make `src.*` imports work whatever the working directory (local or Vercel).
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from fastapi import FastAPI, Header, HTTPException  # noqa: E402
-from fastapi.responses import HTMLResponse  # noqa: E402
+from fastapi import FastAPI, Header, HTTPException, Request, Response  # noqa: E402
+from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse  # noqa: E402
 from pydantic import BaseModel, Field  # noqa: E402
 
 from src import config  # noqa: E402
@@ -59,7 +59,7 @@ def health() -> dict:
         "llm_configured": bool(config.LLM_API_KEY),
         "models": {role: m or None for role, m in config.MODELS.items()},
         "streetview_configured": bool(config.GOOGLE_MAPS_API_KEY),
-        "access_code_required": bool(config.ACCESS_CODE),
+        "access_code_required": True,
         "cache": "upstash" if config.UPSTASH_REDIS_REST_URL else "file",
     }
 
@@ -69,12 +69,18 @@ def industries() -> list[dict]:
     return [{"key": k, "label": v[0]} for k, v in INDUSTRIES.items()]
 
 
+def require_access_code(value: str | None) -> None:
+    if not config.ACCESS_CODE:
+        raise HTTPException(503, "The assessment service needs an access code configured.")
+    if value != config.ACCESS_CODE:
+        raise HTTPException(401, "Invalid or missing access code (X-Access-Code header).")
+
+
 @app.post("/api/llm-input")
 def create_llm_input(req: LlmInputRequest, for_llm: bool = False,
                      x_access_code: str | None = Header(None)) -> dict:
     # The API spends OpenRouter + Google credits: on a public URL, require the team's access code.
-    if config.ACCESS_CODE and x_access_code != config.ACCESS_CODE:
-        raise HTTPException(401, "Invalid or missing access code (X-Access-Code header).")
+    require_access_code(x_access_code)
     from src.pipeline import InputError, ServiceError, for_llm_text, run
     try:
         doc = run(req.client_name, req.company_legal_name, req.address, req.industry_type, req.website)
@@ -99,10 +105,8 @@ REPORTS_DIR = Path(_os.environ.get("REPORTS_DIR") or ("/tmp/reports" if config.O
 _JOBS: dict[str, Path] = {}
 
 
-@app.post("/api/reports", status_code=202)
-def start_report(req: LlmInputRequest, x_access_code: str | None = Header(None)) -> dict:
-    if config.ACCESS_CODE and x_access_code != config.ACCESS_CODE:
-        raise HTTPException(401, "Invalid or missing access code (X-Access-Code header).")
+def _new_job(req: "LlmInputRequest") -> tuple[str, Path, threading.Thread]:
+    """Creates the job folder and returns (job_id, folder, thread that runs the report pipeline — not started)."""
     from src.report import pipeline as report_pipeline
     slug = _re.sub(r"[^a-z0-9]+", "-", req.company_legal_name.lower()).strip("-")[:35] or "case"
     job_id = f"{slug}-{_time.strftime('%Y%m%d-%H%M%S')}-{uuid4().hex[:12]}"
@@ -116,6 +120,7 @@ def start_report(req: LlmInputRequest, x_access_code: str | None = Header(None))
     def run_job() -> None:
         try:
             report_pipeline.run(doc, out)
+            _store_job(job_id, out)
         except Exception:
             logging.getLogger(__name__).exception("Report job %s failed", job_id)
             (out / "metrics.json").write_text(
@@ -123,8 +128,62 @@ def start_report(req: LlmInputRequest, x_access_code: str | None = Header(None))
                 encoding="utf-8",
             )
 
-    threading.Thread(target=run_job, daemon=True).start()
+    return job_id, out, threading.Thread(target=run_job, daemon=True)
+
+
+@app.post("/api/reports", status_code=202)
+def start_report(req: LlmInputRequest, x_access_code: str | None = Header(None)) -> dict:
+    """Background job + polling (GET /api/reports/{id}). Long-running servers only: on Vercel the thread is suspended
+    once this response is sent — use POST /api/reports/stream there."""
+    require_access_code(x_access_code)
+    job_id, _, thread = _new_job(req)
+    thread.start()
     return {"job_id": job_id}
+
+
+STREAM_MAX_S = 280  # under Vercel's 300 s function limit (Hobby, Fluid compute)
+
+
+@app.post("/api/reports/stream")
+def stream_report(req: LlmInputRequest, x_access_code: str | None = Header(None)) -> StreamingResponse:
+    """Runs the report pipeline while the request stays open and streams its progress as NDJSON: one line per change,
+    same shape as GET /api/reports/{id} ({job_id, status, stage, done_stages, error}), plus {"heartbeat": true}
+    lines every 10 s. The last line has a final status (succeeded | invalid_report | failed). Works on Vercel because the
+    function stays alive as long as the response is streaming."""
+    require_access_code(x_access_code)
+    job_id, out, thread = _new_job(req)
+    thread.start()
+
+    def events():
+        last, t0, beat = None, _time.monotonic(), _time.monotonic()
+        while True:
+            p = _progress(job_id, out)
+            if p != last:
+                yield _json.dumps(p) + "\n"
+                last, beat = p, _time.monotonic()
+            if p["status"] != "running" and not thread.is_alive():
+                return
+            if _time.monotonic() - t0 > STREAM_MAX_S:
+                yield _json.dumps({**p, "status": "failed", "stage": None,
+                                   "error": {"stage": p.get("stage"), "message": "Report generation timed out."}}) + "\n"
+                return
+            if _time.monotonic() - beat > 10:
+                yield '{"heartbeat": true}\n'
+                beat = _time.monotonic()
+            _time.sleep(0.5)
+
+    return StreamingResponse(events(), media_type="application/x-ndjson",
+                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+
+@app.get("/api/reports/{job_id}/photos/{name}")
+def building_photo(job_id: str, name: Literal["orthophoto.jpg", "facade_streetview.jpg"]) -> FileResponse:
+    if not _re.fullmatch(r"[a-z0-9-]{3,80}", job_id):
+        raise HTTPException(404)
+    path = REPORTS_DIR / job_id / "images" / name
+    if not path.is_file():
+        raise HTTPException(404)
+    return FileResponse(path, media_type="image/jpeg")
 
 
 @app.get("/api/reports/{job_id}")
@@ -132,6 +191,11 @@ def report_status(job_id: str) -> dict:
     out = _JOBS.get(job_id) or (REPORTS_DIR / job_id if _re.fullmatch(r"[a-z0-9-]{3,80}", job_id) else None)
     if not out or not (out / "metrics.json").exists():
         raise HTTPException(404, "Unknown report job.")
+    return _progress(job_id, out)
+
+
+def _progress(job_id: str, out: Path) -> dict:
+    """Status of a job from its metrics.json: {job_id, status, stage running now, done_stages, error}."""
     try:
         m = _json.loads((out / "metrics.json").read_text(encoding="utf-8"))
     except ValueError:  # being written
@@ -142,6 +206,84 @@ def report_status(job_id: str) -> dict:
     err = m.get("error") or {}
     return {"job_id": job_id, "status": m.get("status", "running"), "stage": stage, "done_stages": done,
             "error": {"stage": err.get("stage"), "message": err.get("message")} if err else None}
+
+# ---------------------------------------------------------------- report storage (underwriter dashboard)
+# Vercel Blob (private store) when BLOB_STORE_ID / BLOB_READ_WRITE_TOKEN is set — needed on Vercel, where REPORTS_DIR
+# is a per-instance /tmp. Otherwise the local REPORTS_DIR folder. Same layout: reports/<job_id>/<file>.
+# Hobby quota: 1 GB, 2,000 uploads/listings and 10,000 reads per month → listings are cached 60 s per instance and
+# files (immutable once a job is finished) are cached in memory and in the browser.
+BLOB = bool(_os.environ.get("BLOB_STORE_ID") or _os.environ.get("BLOB_READ_WRITE_TOKEN"))
+CASE_FILES = {"output.json", "features_combined.json", "metrics.json", "validation.json", "output.invalid.json"}
+_TYPES = {".json": "application/json", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png"}
+_CASES_CACHE: dict = {"t": 0.0, "ids": []}
+_FILE_CACHE: dict[str, bytes] = {}
+CODE_COOKIE = "axa_access"
+
+
+def _store_job(job_id: str, out: Path) -> None:
+    """Uploads a finished job's files (report, evidence, metrics, images) to the private Blob store. Never fails the job."""
+    if not BLOB:
+        return
+    from vercel.blob import sync as blob
+    for p in sorted(out.rglob("*")):
+        rel = p.relative_to(out).as_posix()
+        if p.is_file() and (rel in CASE_FILES or rel.startswith("images/")):
+            try:
+                blob.put_blob(f"reports/{job_id}/{rel}", p.read_bytes(), access="private", allow_overwrite=True,
+                              content_type=_TYPES.get(p.suffix.lower(), "application/octet-stream"))
+            except Exception:  # noqa: BLE001
+                logging.getLogger(__name__).exception("Blob upload failed for %s/%s", job_id, rel)
+    _CASES_CACHE["t"] = 0.0
+
+
+def _case_access(x_access_code: str | None, request: Request) -> None:
+    require_access_code(x_access_code or request.cookies.get(CODE_COOKIE))
+
+
+@app.get("/api/cases")
+def list_cases(request: Request, response: Response, x_access_code: str | None = Header(None)) -> list[str]:
+    """Report folders available to the underwriter dashboard (newest first). Header X-Access-Code or the cookie set
+    here (so that <img> requests for case photos are authorised too)."""
+    _case_access(x_access_code, request)
+    if x_access_code:
+        response.set_cookie(CODE_COOKIE, x_access_code, httponly=True, secure=config.ON_VERCEL, samesite="strict",
+                            max_age=30 * 24 * 3600, path="/api/cases")
+    if _time.monotonic() - _CASES_CACHE["t"] > 60:
+        if BLOB:
+            from vercel.blob import sync as blob
+            ids = [e.prefix.rstrip("/").split("/")[-1] for e in blob.query_blob_entries(prefix="reports/")
+                   if isinstance(e, blob.BlobPrefix)]
+        else:
+            ids = [d.name for d in REPORTS_DIR.iterdir() if d.is_dir()] if REPORTS_DIR.exists() else []
+        _CASES_CACHE.update(t=_time.monotonic(), ids=sorted(ids, key=lambda i: i.split("-")[-3:-1], reverse=True))
+    return _CASES_CACHE["ids"]
+
+
+@app.get("/api/cases/{case_id}/files/{path:path}")
+def case_file(case_id: str, path: str, request: Request, x_access_code: str | None = Header(None)) -> Response:
+    """One file of a case (output.json, features_combined.json, metrics.json, validation.json, images/…)."""
+    _case_access(x_access_code, request)
+    if not _re.fullmatch(r"[a-z0-9-]{3,80}", case_id) or not (path in CASE_FILES or _re.fullmatch(r"images/[\w.-]+", path)):
+        raise HTTPException(404)
+    key = f"reports/{case_id}/{path}"
+    data = _FILE_CACHE.get(key)
+    if data is None:
+        if BLOB:
+            from vercel.blob import sync as blob
+            try:
+                data = blob.get_blob(key, access="private").body
+            except blob.BlobNotFoundError:
+                raise HTTPException(404) from None
+        else:
+            f = REPORTS_DIR / case_id / path
+            if not f.is_file():
+                raise HTTPException(404)
+            data = f.read_bytes()
+        if len(_FILE_CACHE) < 500:
+            _FILE_CACHE[key] = data
+    return Response(data, media_type=_TYPES.get(Path(path).suffix.lower(), "application/octet-stream"),
+                    headers={"Cache-Control": "private, max-age=3600"})
+
 
 if __name__ == "__main__":
     print("Run with: uvicorn src.main:app --reload")

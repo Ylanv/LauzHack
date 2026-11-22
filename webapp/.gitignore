@@ -3,3 +3,5 @@ dist/
 
 # original betta media (@dwcminh.ascii): local comparison only, not ours to publish
 public/original/
+.vercel
+.env*

@@ -3,7 +3,7 @@
 Read this before changing `webapp/`. `frontend/index.html` is a different page: the simple one the backend serves for the Vercel demo. To ask for a change in the web app, write it in [WEBAPP_REQUESTS.md](WEBAPP_REQUESTS.md).
 
 ## In one paragraph
-A client-facing pre-assessment page for commercial building insurance (fictional brand **Alpenmark**), for buildings in the **canton of Geneva**.
+A client-facing pre-assessment page for commercial building insurance (fictional brand **AXAlotl**), for buildings in the **canton of Geneva**.
 1. The client fills a short form.
 2. The web app starts **one report job** on the backend (`POST /api/reports`: ETL → LLM report → validation).
 3. A waiting screen flies a map from the globe down to the building and follows the job until the report is generated.
@@ -70,9 +70,9 @@ uv venv .venv && uv pip install --python .venv/bin/python -r requirements.txt uv
   - It swims across the whole screen and speeds up behind the form so it never lingers there. It is shown on the form and sent screens only.
   - The media are **not in git**, because their licence forbids reposting them. Copy them from github.com/dwcminh/ascii-art/tree/main/BETTA-FISH into `webapp/public/original/` to see the fish. Without them there is no fish.
 
-## Underwriter dashboard (`/dashboard.html`, `src/dashboard/`)
+## Ticket desk for the AXA underwriting team (`/dashboard.html`, `src/dashboard/`)
 Back-office page for underwriters, built from `docs/FRONTEND_INTEGRATION.md`. It is **not linked from the client app** and must never be shown to clients.
-- **Data:** one folder per case, written by `python -m src.report --input <request.json> --output reports/<case>` (repo root). In dev, a Vite plugin (`webapp/vite.config.ts`) lists and serves `reports/` (change it with `REPORTS_DIR`). Anywhere else, "Open a case folder" reads a folder from disk. `reports/` is git-ignored because it can hold client data.
+- **Data:** one folder per case, written by `python -m src.report --input <request.json> --output reports/<case>` (repo root). In dev, a Vite plugin (`webapp/vite.config.ts`) lists and serves `reports/` (change it with `REPORTS_DIR`). The list refreshes itself every 20 s (new and finished tickets). `reports/` is git-ignored because it can hold client data.
 - **Jira-like tickets** (`src/dashboard/tickets.ts`): every report is a ticket.
   - Queues: All open · Assigned to me · Waiting for client · Resolved · All cases.
   - Columns: Type (declared activity), Key, Summary (company + address), Requester, Assignee, Priority (highest finding), Status.
@@ -106,7 +106,7 @@ Back-office page for underwriters, built from `docs/FRONTEND_INTEGRATION.md`. It
 - Before a PR, run `npx tsc --noEmit` in `webapp/`.
 
 ## Handoff: running the client web app with real API keys
-1. Repo root: put the keys in `.env` (see `.env.example`; never committed): vision (OpenRouter), facade (Google) and the report model's key (default config `claude_opus55`, see `models/configs.json`; `REPORT_MODEL` picks another one).
+1. Repo root: put the keys in `.env` (see `.env.example`; never committed): vision (OpenRouter), facade (Google) and the report model's key (default config `openrouter_gemini35flash_lite`, see `models/configs.json`; `REPORT_MODEL` picks another one).
 2. Backend: `.venv/bin/python -m uvicorn src.main:app --port 8000` (without `REPORT_MODEL=mock`).
 3. Web app: `cd webapp && npm install && npx vite --port 5173`, open http://localhost:5173 and send the demo case.
 4. Check that the waiting screen lasts as long as the real pipeline (ETL + vision + LLM report) and that the confirmation only appears when `reports/<job_id>/output.json` exists. The report then shows in http://localhost:5173/dashboard.html.

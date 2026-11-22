@@ -34,6 +34,7 @@ export const MapFlight = (() => {
   let aRect: { x: number; y: number; w: number; h: number } | null = null
   const S = { step: "identity" as FlightStep, progress: 0, coords: { lon: 7.36333, lat: 46.22724, label: "Valais (VS)", cantonId: 23 } as Coords }
   const cam = { lon: 0, lat: 22, zoom: 1.8 }
+  let appliedCamera: { lon: number; lat: number; zoom: number; left: number; right: number } | null = null
   const anim = { z: 0, marker: 0, aerial: 0, inset: 0, hz: [0, 0, 0], obsAt: [-1, -1, -1], capA: 1, capText: "", t: 0 }
   const INS = { q: [] as Insight[], shown: [] as (Insight & { t0: number })[], last: -9 }
   let variant: "A" | "B" = "B", appliedVariant = "", free = false
@@ -121,6 +122,36 @@ export const MapFlight = (() => {
     ctx.strokeStyle = "rgba(61,82,160," + (1 - ph) * 0.85 + ")"; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(p.x, p.y, 7 + ph * 30, 0, TAU); ctx.stroke()
     ctx.fillStyle = "#3d52a0"; ctx.beginPath(); ctx.arc(p.x, p.y, 7, 0, TAU); ctx.fill()
     ctx.strokeStyle = "#fff"; ctx.lineWidth = 2.5; ctx.stroke(); ctx.globalAlpha = 1
+  }
+  const photoFiles = [
+    { file: "orthophoto.jpg", label: "Roof / swisstopo" },
+    { file: "facade_streetview.jpg", label: "Street View / Google" },
+  ]
+  let photoJob = ""
+  let photos: HTMLImageElement[] = []
+  function drawPhotos() {
+    if (cam.zoom < 15.8 || !photos.length) return
+    const anchor = map!.project([S.coords.lon, S.coords.lat])
+    if (anchor.x < 0 || anchor.x > W || anchor.y < 0 || anchor.y > H) return
+    const size = clampF(W * 0.16, 80, Math.min(144, H * 0.23))
+    const y = clampF(anchor.y - size - 55, 64, H - size - 36)
+    photos.forEach((img, i) => {
+      if (!img.complete || !img.naturalWidth) return
+      const x = clampF(anchor.x + (i ? 26 : -size - 26), 8, W - size - 8)
+      ctx.save()
+      ctx.beginPath(); ctx.moveTo(anchor.x, anchor.y); ctx.lineTo(x + size / 2, y + size / 2)
+      ctx.strokeStyle = "#283356"; ctx.lineWidth = 3; ctx.stroke()
+      ctx.strokeStyle = "#eff3ff"; ctx.lineWidth = 1.4; ctx.stroke()
+      rrect(x, y, size, size, 10); ctx.shadowColor = "#1c225080"; ctx.shadowBlur = 12
+      ctx.fillStyle = "#17213b"; ctx.fill(); ctx.shadowBlur = 0
+      ctx.save(); ctx.clip()
+      const scale = Math.min(size / img.naturalWidth, (size - 21) / img.naturalHeight)
+      const w = img.naturalWidth * scale, h = img.naturalHeight * scale
+      ctx.drawImage(img, x + (size - w) / 2, y + (size - 21 - h) / 2, w, h)
+      text(photoFiles[i].label, x + size / 2, y + size - 10, size < 100 ? 8 : 10, 600, "#fff", "center", 0)
+      ctx.restore(); rrect(x, y, size, size, 10); ctx.strokeStyle = "#e9edff"; ctx.stroke()
+      ctx.restore()
+    })
   }
   function drawLegend() {
     const lg: [string, string][] = [["Surface runoff · medium", "rgba(112,145,230,.9)"], ["Hail · moderate frequency", "rgba(223,228,246,.9)"], ["Seismic zone Z3a", "rgba(173,187,218,.9)"]]
@@ -239,10 +270,10 @@ export const MapFlight = (() => {
     const CW = 232, HEAD = 34, LH = 17
     const cards = vis.map(({ f, a }) => {
       const p = map!.project(f.at), dist = f.d < 3 ? "Adjoining" : distLabel(f.d) + " away"
-      const label = f.kind === "building" ? "Your building" : f.kind === "neighbour" ? "Neighbouring building" : f.kind === "road" ? "Main road" : f.kind === "water" ? f.name || "Water" : "Wooded area"
+      const label = f.kind === "building" ? "Your building" : f.kind === "neighbour" ? "Neighbouring building" : f.kind === "road" ? f.name || "Access road" : f.kind === "water" ? f.name || "Water" : "Wooded area"
       const desc = f.kind === "building" ? "The footprint matched to your address."
         : f.kind === "neighbour" ? `${dist}. Matters for fire spread.`
-        : f.kind === "road" ? `${f.name ? f.name + ", " : ""}${dist.toLowerCase()}. Access for emergency services.`
+        : f.kind === "road" ? `${dist} from the building address.`
         : f.kind === "water" ? `${dist}. Flood and runoff exposure.` : `${dist}. Wildfire and storm exposure.`
       const lines = wrap(desc, CW - 28, `400 12.5px ${UI}`)
       return { f, a, p, label, lines, w: CW, h: HEAD + 12 + lines.length * LH + 10, side: p.x < cxm ? -1 : 1, y: 0 }
@@ -404,6 +435,8 @@ export const MapFlight = (() => {
     const b = S.coords, ZE = zGlobe() + 1.3
     const zT = st === "zoom" ? S.progress : inZoom ? 1 : 0
     anim.z += (zT - anim.z) * (isStatic ? 1 : 1 - Math.exp(-dt * 3.2))
+    // End the exponential tail once the remaining zoom is visually subpixel.
+    if (zT === 1 && 1 - anim.z < 0.001) anim.z = 1
     if (inZoom || anim.z > 0.001) { // deterministic camera: one smoothed parameter drives zoom and centre
       const p = sm(anim.z), zoom = ZE + (Z_BUILDING - ZE) * p
       const r0 = 2 ** -ZE, r1 = 2 ** -Z_BUILDING, f = clampF((r0 - 2 ** -zoom) / (r0 - r1), 0, 1)
@@ -426,12 +459,21 @@ export const MapFlight = (() => {
     const shift = panelW ? Math.min(230, (W - panelW) * 0.2) * anim.aerial : 0
     cxm = panelW + (W - panelW) / 2 - shift
     const tilt = fade(cam.zoom, 11, 16.5)
-    if (free) { cam.zoom = map.getZoom() } else map.jumpTo({ center: [cam.lon, cam.lat], zoom: cam.zoom, pitch: PITCH_MAX * tilt, bearing: 0, padding: { left: panelW, right: shift * 2, top: 0, bottom: 0 } })
+    const right = shift * 2
+    if (free) {
+      cam.zoom = map.getZoom()
+      appliedCamera = null
+    } else if (!appliedCamera || cam.lon !== appliedCamera.lon || cam.lat !== appliedCamera.lat ||
+               cam.zoom !== appliedCamera.zoom || panelW !== appliedCamera.left || right !== appliedCamera.right) {
+      map.jumpTo({ center: [cam.lon, cam.lat], zoom: cam.zoom, pitch: PITCH_MAX * tilt, bearing: 0,
+        padding: { left: panelW, right, top: 0, bottom: 0 } })
+      appliedCamera = { lon: cam.lon, lat: cam.lat, zoom: cam.zoom, left: panelW, right }
+    }
 
     if (SHOW_FEATURES && !FE.done && cam.zoom > 15.8 && performance.now() - FE.last > 700) {
       FE.last = performance.now(); FE.tries++
       const r = analyseSurroundings(S.coords, (layer, filter) => map!.querySourceFeatures("vt", { sourceLayer: layer, filter: filter as any }) as any[])
-      if (r.hasOwn || FE.tries >= 8) { FE.done = true; FE.list = r.out; FE.list.forEach((f, i) => { f.t0 = isStatic ? 0 : t + 0.4 + i * 1.1 }); fitAerial() }
+      if (map.isSourceLoaded("vt") && (r.hasOwn || FE.tries >= 8)) { FE.done = true; FE.list = r.out.filter((feature) => feature.kind === "building"); FE.list.forEach((f, i) => { f.t0 = isStatic ? 0 : t + 0.4 + i * 1.1 }); fitAerial() }
     }
     // overlay
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, W, H)
@@ -440,6 +482,7 @@ export const MapFlight = (() => {
     drawMarker(t)
     drawInset(t)
     if (SHOW_FEATURES && variant === "B") drawFeatures(t)
+    drawPhotos()
     if (SHOW_OVERLAYS) { drawLegend(); drawAerialCard(t); drawInsights(t) }
     if (SHOW_OVERLAYS && anim.capText) {
       ctx.globalAlpha = anim.capA * 0.9; ctx.font = "400 12px system-ui,sans-serif"; if ("letterSpacing" in ctx) (ctx as any).letterSpacing = "4px"
@@ -469,7 +512,18 @@ export const MapFlight = (() => {
       if (on) { map.dragPan.enable(); map.scrollZoom.enable(); map.doubleClickZoom.enable(); map.touchZoomRotate.enable(); map.touchZoomRotate.disableRotation(); map.keyboard.enable(); map.getCanvas().style.cursor = "grab" }
       else { map.dragPan.disable(); map.scrollZoom.disable(); map.doubleClickZoom.disable(); map.touchZoomRotate.disable(); map.keyboard.disable(); map.getCanvas().style.cursor = "" }
     },
+    loadBuildingPhotos(job: string) {
+      if (photoJob === job) return
+      photoJob = job
+      photos = photoFiles.map(({ file }) => {
+        const img = new Image()
+        img.src = `/api/reports/${encodeURIComponent(job)}/photos/${file}`
+        return img
+      })
+    },
     reset() {
+      appliedCamera = null
+      photos = []; photoJob = ""
       if (free) this.setFree(false)
       INS.q = []; INS.shown = []; INS.last = -9; FE.list = []; FE.tries = 0; FE.done = false; cardKey = ""
       Object.assign(cam, { lon: 0, lat: 22, zoom: W ? zGlobe() : 1.8 }); inset.t0 = -1; Object.assign(anim, { z: 0, marker: 0, aerial: 0, inset: 0, hz: [0, 0, 0], obsAt: [-1, -1, -1], capA: 1, capText: "" })
