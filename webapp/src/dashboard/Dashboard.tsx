@@ -26,6 +26,13 @@ function useDismiss(open: boolean, close: () => void) {
 }
 
 const keyOf = (c: CaseData) => String(c.output?.case_id || c.bundle?.case?.case_id || c.id).toUpperCase()
+/** Live job keys are long (COMPANY-SLUG-YYYYMMDD-HHMMSS-HASH). In the queue: company slug (max 12 chars) + the last 4
+ *  hash characters, e.g. "CMDS-SA…19DF"; the full key shows on hover and on the ticket page. */
+const shortKey = (k: string) => {
+  const m = k.match(/^(.*?)-\d{8}-\d{6}-([0-9A-Z]+)$/)
+  if (m) return (m[1].length > 12 ? m[1].slice(0, 12).replace(/-+$/, "") : m[1]) + "…" + m[2].slice(-4)
+  return k.length > 16 ? k.slice(0, 14).replace(/-+$/, "") + "…" : k
+}
 
 export default function Dashboard() {
   const [cases, setCases] = useState<CaseData[] | null>(null)
@@ -166,7 +173,7 @@ function QueueView({ rows, title, onOpen, update }: { rows: { c: CaseData; t: Ti
               onClick={(e) => { if (!(e.target as HTMLElement).closest("button, select, a, input, label, .jr-menu")) onOpen(c.id) }}
               onKeyDown={(e) => { if (e.key === "Enter" && e.target === e.currentTarget) onOpen(c.id) }}>
               <td><span className="jr-type"><TypeIcon />{type}</span></td>
-              <td className="jr-key">{keyOf(c)}</td>
+              <td className="jr-key"><span title={keyOf(c)}>{shortKey(keyOf(c))}</span></td>
               <td><button type="button" className="jr-link" onClick={() => onOpen(c.id)}>{cs.legal_company_name || keyOf(c)}</button>{cs.building_address && <div className="jr-sub"><MapLink address={cs.building_address} /></div>}</td>
               <td>{cs.client_name || "—"}</td>
               <td><Assignee value={t.assignee} onChange={(a) => update(c.id, { assignee: a })} /></td>
@@ -247,6 +254,7 @@ function Issue({ c, t, s, onBack, update, queueLabel }: { c: CaseData; t: Ticket
         <div className="jr-box">
           <div className="jr-box-h">Details</div>
           <dl className="jr-kv">
+            <div><dt>Key</dt><dd className="jr-fullkey">{keyOf(c)}</dd></div>
             <div><dt>Assignee</dt><dd><Assignee value={t.assignee} onChange={(a) => update({ assignee: a })} /></dd></div>
             <div><dt>Readiness</dt><dd>{es.underwriting_readiness ? <span className={"jr-loz tone-" + toneOfReadiness(es.underwriting_readiness)}>{READINESS[es.underwriting_readiness]?.[0]}</span> : "—"}</dd></div>
             <div><dt>Priority</dt><dd>{topPriority(r) ? <Priority p={topPriority(r)!} /> : "—"}</dd></div>
