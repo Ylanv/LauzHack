@@ -166,9 +166,12 @@ def stream_report(req: LlmInputRequest, x_access_code: str | None = Header(None)
     thread.start()
 
     def events():
-        last, t0, beat = None, _time.monotonic(), _time.monotonic()
+        last, t0, beat, imgs = None, _time.monotonic(), _time.monotonic(), False
         while True:
             p = _progress(job_id, out)
+            if not imgs and "features" in p["done_stages"]:   # photos exist now: the map fetches them while the LLM still runs
+                imgs = True
+                _store_job(job_id, out, only_images=True)
             if p != last:
                 yield _json.dumps(p) + "\n"
                 last, beat = p, _time.monotonic()
@@ -192,9 +195,16 @@ def building_photo(job_id: str, name: Literal["orthophoto.jpg", "facade_streetvi
     if not _re.fullmatch(r"[a-z0-9-]{3,80}", job_id):
         raise HTTPException(404)
     path = REPORTS_DIR / job_id / "images" / name
-    if not path.is_file():
-        raise HTTPException(404)
-    return FileResponse(path, media_type="image/jpeg")
+    if path.is_file():
+        return FileResponse(path, media_type="image/jpeg")
+    if BLOB:  # Vercel: the job ran on another instance (its /tmp is not ours) → the photos were put in the Blob store
+        from vercel.blob import sync as blob
+        try:
+            data = blob.get_blob(f"reports/{job_id}/images/{name}", access="private").body
+        except blob.BlobNotFoundError:
+            raise HTTPException(404) from None
+        return Response(data, media_type="image/jpeg", headers={"Cache-Control": "private, max-age=3600"})
+    raise HTTPException(404)
 
 
 @app.get("/api/reports/{job_id}")
@@ -231,20 +241,22 @@ _FILE_CACHE: dict[str, bytes] = {}
 CODE_COOKIE = "axa_access"
 
 
-def _store_job(job_id: str, out: Path) -> None:
-    """Uploads a finished job's files (report, evidence, metrics, images) to the private Blob store. Never fails the job."""
+def _store_job(job_id: str, out: Path, only_images: bool = False) -> None:
+    """Uploads a finished job's files (report, evidence, metrics, images) to the private Blob store. Never fails the job.
+    only_images: just the photos, as soon as they are written (the web app shows them before the report is done)."""
     if not BLOB:
         return
     from vercel.blob import sync as blob
     for p in sorted(out.rglob("*")):
         rel = p.relative_to(out).as_posix()
-        if p.is_file() and (rel in CASE_FILES or rel.startswith("images/")):
+        if p.is_file() and (rel.startswith("images/") if only_images else (rel in CASE_FILES or rel.startswith("images/"))):
             try:
                 blob.put_blob(f"reports/{job_id}/{rel}", p.read_bytes(), access="private", allow_overwrite=True,
                               content_type=_TYPES.get(p.suffix.lower(), "application/octet-stream"))
             except Exception:  # noqa: BLE001
                 logging.getLogger(__name__).exception("Blob upload failed for %s/%s", job_id, rel)
-    _CASES_CACHE["t"] = 0.0
+    if not only_images:
+        _CASES_CACHE["t"] = 0.0
 
 
 def _case_access(x_access_code: str | None, request: Request) -> None:
