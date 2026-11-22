@@ -10,6 +10,7 @@ import {
 import DeskCompanion, { type DeskLine } from "./DeskCompanion"
 import type { BaseEmotion, Reaction } from "../mascot/emotion"
 import { getTicket, saveTicket, statusOf, inQueue, topPriority, QUEUES, STATUS_LABEL, STATUS_TONE, WORKFLOW, type Queue, type Status, type Ticket } from "./tickets"
+import { Wordmark } from "../brand/Brand"
 
 /** close a pop-up (menu, popover) on a click outside it or on Escape */
 function useDismiss(open: boolean, close: () => void) {
@@ -83,8 +84,7 @@ export default function Dashboard() {
     <div className="jr">
       <aside className="jr-side no-print">
         <button type="button" className="jr-brand" onClick={() => setOpen(null)}>
-          <i><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinejoin="round" strokeLinecap="round"><path d="M3 11l9-7 9 7v9H3z" /><path d="M9 20v-6h6v6" /></svg></i>
-          <span><b>AXAlotl</b><small>Ticket desk · underwriting team</small></span>
+          <Wordmark size={22} />
         </button>
         <p className="jr-side-h">Queues</p>
         <nav>{QUEUES.map(([q, label]) => (

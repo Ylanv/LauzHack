@@ -1,0 +1,13 @@
+/* AXAlotl wordmark: Nunito 900, "AXAl" in AXA blue, "tl" in the app indigo, the mascot's head as the o */
+.wordmark{display:inline-flex;align-items:baseline;font-family:Nunito,ui-rounded,system-ui,sans-serif;font-weight:900;line-height:1;letter-spacing:-.02em;color:#00008F;white-space:nowrap}
+.wordmark__tl{color:#3d52a0}
+.wordmark__o{width:.93em;height:.62em;margin:0 .03em;transform:translateY(.02em);display:inline-block;flex:none}
+/* inside the headers, whose generic 'span' rules must not reach the wordmark */
+.brand .wordmark span,.jr-brand .wordmark span{font:inherit;color:inherit;padding:0;border:0;margin:0}
+.brand .wordmark .wordmark__tl,.jr-brand .wordmark .wordmark__tl{color:#3d52a0}
+.brand.flightbrand{padding:10px 16px}
+.jr-side .jr-brand{padding:8px 8px 18px}
+/* the headers style every span (.brand span: small muted text with a divider; .jr-brand span: grid): undo it for the wordmark */
+.brand .wordmark,.jr-brand .wordmark{display:inline-flex;align-items:baseline;font-family:Nunito,ui-rounded,system-ui,sans-serif;font-weight:900;line-height:1;letter-spacing:-.02em;color:#00008F;padding:0;border:0;margin:0}
+.brand .wordmark span,.jr-brand .wordmark span{display:inline;font:inherit;color:inherit;padding:0;border:0;margin:0;line-height:1}
+.brand .wordmark .wordmark__tl,.jr-brand .wordmark .wordmark__tl{color:#3d52a0}
