@@ -156,8 +156,6 @@ Unknown stays unknown (CMDS: the model does not guess solar panels or storage it
 
 <p align="center"><img src="docs/assets/vlm_benchmark_chart.png" alt="Quality vs cost per building and vs time per image, per vision model" width="900"></p>
 
-<p align="center"><img src="docs/assets/vlm_benchmark_table.png" alt="Results table per vision model" width="900"></p>
-
 **How we measured quality**
 - **Data:** 8 real images from the pipeline (4 Geneva buildings × aerial + facade), each sent twice to every model: 144 calls, $0.77.
 - **Reference:** we labelled by eye only what is clearly visible (`benchmark/vlm/labels.json`): roof type, solar panels, skylights, close neighbours, roof equipment, facade material, outdoor storage, company sign.
@@ -172,6 +170,9 @@ Unknown stays unknown (CMDS: the model does not guess solar panels or storage it
 Reproduce: `python -m benchmark.vlm.run`, then `python -m benchmark.vlm.report --readme`.
 
 ---
+
+
+
 
 ## Report generation
 
