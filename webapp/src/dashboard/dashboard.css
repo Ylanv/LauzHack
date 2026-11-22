@@ -198,3 +198,7 @@ body{background:var(--canvas)}
 
 /* load problems (online dashboard) */
 .jr-notice{background:#fff7e6;border:1px solid #f0c36d;color:#6b4a00;border-radius:4px;padding:8px 12px;margin:0 0 12px}
+
+/* keys: short in the queue (full on hover), full on the ticket page */
+.jr-table td.jr-key{white-space:nowrap;width:1%}
+.jr-fullkey{font:600 12px ui-monospace,Menlo,Consolas,monospace;color:var(--sub);word-break:break-all}
