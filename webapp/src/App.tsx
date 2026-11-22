@@ -4,10 +4,11 @@ import FormScreen, { type ServerError } from "./components/FormScreen"
 import Flight from "./components/Flight"
 import DoneScreen from "./components/DoneScreen"
 import ReviewBar from "./components/ReviewBar"
+import DemoPanel from "./components/DemoPanel"
 import { MapFlight } from "./lib/mapFlight"
 import { paintBackground, paintFish } from "./lib/background"
 import { clamp, reducedMotion } from "./lib/utils"
-import { MOCK, INSIGHTS } from "./pipeline/mock"
+import { MOCK, INSIGHTS, DEMO_INDUSTRIES } from "./pipeline/mock"
 import { DEMO, getIndustries, getFootprint, streamReport, progressError, AssessError, type ReportProgress } from "./pipeline"
 import type { Coords, FlightInput, RequestInput, StepId } from "./pipeline/types"
 
@@ -61,12 +62,16 @@ export default function App() {
 
   const say = useCallback((t: string, m?: Mood) => {
     setBubble((b) => ({ t, n: b.n + 1 }))
-    if (m) { setMood(m); window.clearTimeout(moodTimer.current); moodTimer.current = window.setTimeout(() => setMood(screenRef.current === "proc" ? "working" : "idle"), 1800) }
+    // the face always matches the line on screen: a mood lasts exactly as long as its bubble (Companion bubbleMs = 3200),
+    // and a neutral line (a field hint) brings the face back to neutral at once
+    const neutral = () => setMood(screenRef.current === "proc" ? "working" : "idle")
+    window.clearTimeout(moodTimer.current)
+    if (m) { setMood(m); moodTimer.current = window.setTimeout(neutral, 3200) }
+    else neutral()
   }, [])
 
   const finish = useCallback(() => {
-    setScreen("done"); setMood("happy"); say(MOCK.speech.done!)
-    window.clearTimeout(moodTimer.current); moodTimer.current = window.setTimeout(() => setMood("idle"), 5000)
+    setScreen("done"); say(MOCK.speech.done!, "success")
     setLive(DEMO ? "Your request has been sent" : "Your report is ready")
   }, [say])
 
@@ -137,8 +142,8 @@ export default function App() {
         if (r && !r.done && r.live === "error") {   // back to the form, values kept, with what went wrong
           r.done = true; run.current = null
           setFormInit({ input: r.input, coords: r.coords, picked: r.input.address }); setServerError({ kind: r.err.kind, message: r.err.message }); setFormKey((k) => k + 1)
-          setScreen("form"); setMood("puzzled"); setLive(r.err.message)
-          window.clearTimeout(moodTimer.current); moodTimer.current = window.setTimeout(() => setMood("idle"), 2500)
+          setScreen("form"); setLive(r.err.message)
+          say(r.err.kind === "service" ? "Something went wrong on our side." : "Something needs a fix.", "error")
         } else if (r && !r.done) {
           // the timeline never runs ahead of the backend: while the ETL runs it waits before the last step; once the ETL
           // is done it waits inside "Putting the file together" (report writing); it ends only when the report is valid
@@ -178,9 +183,30 @@ export default function App() {
     : (progress?.done_stages ?? []).map((stage) => STAGE_LABEL[stage]).filter(Boolean)
   const runningStep = DEMO ? current : STAGE_LABEL[progress?.stage ?? ""] ?? "Starting"
   const completeReport = held || progress?.status === "succeeded"
-  const status = screen === "proc" ? { done: doneSteps.slice(-2), now: completeReport ? "File complete" : runningStep, complete: completeReport } : null
+  const status = screen === "proc" ? { done: doneSteps, now: completeReport ? "File complete" : runningStep, complete: completeReport } : null
   const skip = () => { MapFlight.setStatic(true); setSkipped(true) }
   const again = () => { setFormInit(null); setServerError(null); setFormKey((k) => k + 1); setScreen("form"); setMood("idle") }
+
+  // /demo.html: jump to any part of the flow, play any companion emotion (simulated, no backend)
+  const demoLabel = () => DEMO_INDUSTRIES.find((x) => x.key === MOCK.sample.industry)?.label ?? MOCK.sample.industry
+  const demo = {
+    form: () => { run.current = null; setFade(false); again() },
+    waiting: () => { run.current = null; start({ ...MOCK.sample }, { ...MOCK.coords }, "", demoLabel()) },
+    confirmation: () => { run.current = null; setInput({ ...MOCK.sample }); setActivity(demoLabel()); setFade(false); setHeld(false); finish() },
+    error: () => {
+      run.current = null; setFade(false)
+      setFormInit({ input: { ...MOCK.sample }, coords: { ...MOCK.coords }, picked: MOCK.sample.address })
+      setServerError({ kind: "service", message: "A public data service did not respond. Your details are kept, please try again." })
+      setFormKey((k) => k + 1); setScreen("form"); say("Something went wrong on our side.", "error")
+    },
+    emotion: (k: "hint" | "happy" | "concerned" | "error" | "success") => {
+      if (k === "hint") say("Who should we get back to?")
+      else if (k === "happy") say("Found it. We will fly there.", "happy")
+      else if (k === "concerned") say("Check the highlighted field.", "puzzled")
+      else if (k === "error") say("Something went wrong on our side.", "error")
+      else say(MOCK.speech.done!, "success")
+    },
+  }
 
   return (
     <>
@@ -201,6 +227,7 @@ export default function App() {
         {DEMO && <ReviewBar variant={variant} onVariant={setVariant} pause={pause} onPause={(v) => { setPause(v); if (!v && held) complete() }} held={held} onContinue={complete} />}
       </Flight>
       <Companion mood={mood} bubble={bubble.t} bubbleKey={bubble.n} status={status} />
+      {DEMO && <DemoPanel a={demo} screen={screen} />}
     </>
   )
 }

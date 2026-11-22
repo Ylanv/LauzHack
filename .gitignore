@@ -15,3 +15,8 @@ dataset/
 
 # Report folders produced by python -m src.report (may hold client data), read by webapp/dashboard.html: local only
 reports/
+# Example reports are committed (dashboard demo data), without third-party photos:
+# Google Street View may not be stored (terms) and website photos belong to the companies.
+!examples/reports/
+examples/reports/*/images/*
+!examples/reports/*/images/orthophoto.jpg

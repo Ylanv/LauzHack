@@ -7,6 +7,8 @@ import {
   buildIndex, resolve, humanise, fmtInline, fmtHazard, fmtRange, fmtShare, isRange, isSynthetic, loadFromApi,
   READINESS, STATUS, PRICING, TARGET, PRIORITY_ORDER, FINDING_TYPE, type CaseData, type Index,
 } from "./data"
+import DeskCompanion, { type DeskLine } from "./DeskCompanion"
+import type { BaseEmotion, Reaction } from "../mascot/emotion"
 import { getTicket, saveTicket, statusOf, inQueue, topPriority, QUEUES, STATUS_LABEL, STATUS_TONE, WORKFLOW, type Queue, type Status, type Ticket } from "./tickets"
 
 /** close a pop-up (menu, popover) on a click outside it or on Escape */
@@ -36,10 +38,47 @@ export default function Dashboard() {
     return () => clearInterval(id)
   }, [])
   useEffect(() => { const u = new URL(location.href); if (open) u.searchParams.set("case", open); else u.searchParams.delete("case"); history.replaceState(null, "", u) }, [open])
-  const update = (id: string, patch: Partial<Ticket>) => { saveTicket(id, patch); bump((n) => n + 1) }
+  // the companion: what it says, with the matching emotion
+  const [line, setLine] = useState<DeskLine | null>(null)
+  const say = (text: string, base?: BaseEmotion, react?: Reaction) => setLine((p) => ({ text, base, react, n: (p?.n ?? 0) + 1 }))
+
+  const update = (id: string, patch: Partial<Ticket>) => {
+    const before = getTicket(id), c = cases?.find((x) => x.id === id)
+    saveTicket(id, patch); bump((n) => n + 1)
+    if (patch.status) {
+      if (patch.status === "resolved") say("Ticket resolved. Nice work!", "idle", "success")
+      else if (patch.status === "in_progress") say("On it: moved to In progress.", "thinking", "happy")
+      else if (patch.status === "waiting_client") say("Waiting for the client's answers.", "concerned")
+      else say("Back to review.", "idle")
+    } else if ("assignee" in patch) {
+      say(patch.assignee === "me" ? "Assigned to you." : "Unassigned.", "idle", patch.assignee === "me" ? "happy" : undefined)
+    } else if (patch.answered) {
+      const total = c?.output?.open_questions?.length ?? 0, n = patch.answered.length
+      if (n <= (before.answered?.length ?? 0)) say("Question reopened.", "idle")
+      else if (total && n >= total) say("All questions answered!", "idle", "success")
+      else say(`Question answered. ${total - n} left.`, "idle", "happy")
+    }
+  }
 
   const rows = (cases || []).map((c) => { const t = getTicket(c.id); return { c, t, s: statusOf(c, t) } })
   const current = rows.find((x) => x.c.id === open)
+
+  // opening a ticket: the companion sums it up; back on the list: how many are open
+  const openCount = rows.filter((x) => inQueue("open", x.s, x.t)).length
+  useEffect(() => {
+    if (!cases) return
+    if (!current) { say(openCount ? `${openCount} open ticket${openCount > 1 ? "s" : ""}.` : "No open ticket. All clear!", "idle", openCount ? undefined : "happy"); return }
+    const { c, s } = current, r = c.output, blocking = (r?.open_questions || []).filter((q: any) => q.blocking_initial_pricing).length
+    if (s === "generating") say("This report is still being generated…", "thinking")
+    else if (s === "failed") say(`This report failed${c.metrics?.error?.stage ? ` at ${c.metrics.error.stage}` : ""}.`, "concerned", "error")
+    else switch (r?.executive_summary?.underwriting_readiness) {
+      case "ready_for_initial_review": say("Ready for initial review.", "idle", "happy"); break
+      case "requires_clarification": say(`Needs clarification: ${blocking} blocking question${blocking === 1 ? "" : "s"}.`, "concerned"); break
+      case "specialist_review_recommended": say("Specialist review recommended.", "concerned"); break
+      case "building_identity_unresolved": say("Building identity unresolved: check the address.", "concerned", "error"); break
+      default: say("Here is the report.", "idle")
+    }
+  }, [open, !!cases]) // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <div className="jr">
       <aside className="jr-side no-print">
@@ -59,6 +98,7 @@ export default function Dashboard() {
           : current ? <Issue c={current.c} t={current.t} s={current.s} onBack={() => setOpen(null)} update={(p) => update(current.c.id, p)} queueLabel={QUEUES.find(([q]) => q === queue)![1]} />
           : <QueueView rows={rows.filter((x) => inQueue(queue, x.s, x.t))} title={QUEUES.find(([q]) => q === queue)![1]} onOpen={setOpen} update={update} />}
       </main>
+      <DeskCompanion line={line} />
     </div>
   )
 }
