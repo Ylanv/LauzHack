@@ -100,7 +100,47 @@ Some risk factors exist only in images, so we use a **small, cheap vision-langua
 - **Low output.** Capped outputs (`max_tokens` 700–1,400) and a "never invent, unknown stays unknown" system prompt.
 - **Cached per image,** so re-running a building costs nothing.
 
-**Measured cost: about 2,600–2,800 input and 900–1,000 output tokens for all three calls, ≈ $0.0006–0.0007 per building** (`etl` in `metrics.json` of the [example reports](examples/reports/)). We have not yet benchmarked other vision models on these three tasks.
+**Measured cost: about 2,600–2,800 input and 900–1,000 output tokens for all three calls, ≈ $0.0006–0.0007 per building** (`etl` in `metrics.json` of the [example reports](examples/reports/)).
+
+### Vision model benchmark (Together AI)
+
+Which small vision model should do this job? We compared 9 serverless vision models on **Together AI** on the two image tasks of the pipeline, aerial photo and street facade. All used the same production prompt and JSON schema (`src/prompts.py`).
+
+**Example 1: aerial photo → extracted features** (CMDS SA, Plan-les-Ouates, model GLM-5.3-Flash)
+
+<p align="center"><img src="docs/assets/vlm_example_cmds-sa.png" alt="Aerial photo of CMDS SA and the features GLM-5.3-Flash extracted" width="900"></p>
+
+**Example 2: aerial photo → extracted features** (Jean Gallay SA, Plan-les-Ouates, model GLM-5.3-Flash)
+
+<p align="center"><img src="docs/assets/vlm_example_jean-gallay-sa.png" alt="Aerial photo of Jean Gallay SA and the features GLM-5.3-Flash extracted" width="900"></p>
+
+Unknown stays unknown (CMDS: the model does not guess solar panels or storage it cannot see), and possible damage is flagged "to inspect", never as confirmed. The examples are aerial photos only: Street View images cannot be published in a public repository (Google's terms).
+
+**Quality vs cost and speed** (upper-left is better):
+
+<p align="center"><img src="docs/assets/vlm_benchmark_chart.png" alt="Quality vs cost per building and vs time per image, per vision model" width="900"></p>
+
+<p align="center"><img src="docs/assets/vlm_benchmark_table.png" alt="Results table per vision model" width="900"></p>
+
+**How we measured quality**
+- **Images:** 8 real images fetched by the pipeline: 4 Geneva buildings (CMDS SA, Jean Gallay SA, Hublot SA, Services Industriels de Genève), each with its aerial orthophoto and its Street View facade. Every model saw every image twice, in fresh calls, for 144 calls in total (≈ $0.77).
+- **Reference labels:** written by visual inspection of each image (`benchmark/vlm/labels.json`), and **only for features that are clearly visible**. Ambiguous features are left out rather than guessed.
+  - **Aerial:** flat roof, solar panels, skylights, neighbours within ~10 m, roof equipment.
+  - **Facade:** facade visible, wall material, outdoor storage along the walls, company sign.
+- **Scoring:** each labelled feature scores 1 when the model's answer matches.
+  - **Partial credit:** "possible" earns 0.5 when the feature is present. "Unknown" earns 0.5 when it is absent, because unknown is cautious but not wrong. A neighbouring material category (e.g. "mixed" for a metal-clad hall) also earns 0.5.
+  - **Zero:** a wrong answer, or invalid JSON.
+  - The **quality** of a model is its average score over all its answers (0–1). Aerial and facade are also shown separately.
+- **Cost and time:**
+  - **Cost:** tokens reported by Together × Together's list price, including the reasoning tokens most of these models generate before answering.
+  - **Time:** wall clock per image.
+- **Limits:** 4 buildings is a small sample, so the scores rank the models rather than measure them precisely. The same model can also vary between two runs on one image. The labels were not made by an underwriter.
+
+**Result:**
+- **GLM-5.3-Flash** gives the best quality of the small models: 0.79, close to the large Kimi-K3 at 0.83. It costs **$0.0015 per building** (≈ 50× cheaper than Kimi-K3) at 6 s per image.
+- **MiniMax-M3.1-Flash** is the fastest and cheapest valid option, at 2.2 s and $0.0005 per building, with quality 0.73.
+
+Reproduce: `python -m benchmark.vlm.run`, then `python -m benchmark.vlm.report --readme`.
 
 ---
 
