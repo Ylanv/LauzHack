@@ -431,9 +431,11 @@ function VisualCard({ sel, c, ix }: { sel: any; c: CaseData; ix: Index }) {
 
 function Valuation({ r, ix }: { r: any; ix: Index }) {
   const vc = r.valuation_commentary || {}, f = ix.byKey.get("reconstruction_value_chf")
+  // the status is already the badge: drop the "upstream status: estimated; " prefix and keep the formula, in capitals at the start
+  const method = String(f?.method || "").replace(/^upstream status:[^;]*;?\s*/i, "").replace(/^./, (c) => c.toUpperCase())
   return (
     <dl className="jr-kv wide">
-      <div><dt>Reconstruction value</dt><dd><b>{f ? (isRange(f.value) ? fmtRange(f.value) : <Value v={f.value} unit={f.unit} k={f.field_key} />) : <span className="jr-unknown">Unknown</span>}</b> {f && <StatusBadge f={f} />}<div className="jr-sub">Indicative range, not an appraisal.{f?.method ? ` ${f.method}` : ""}</div></dd></div>
+      <div><dt>Reconstruction value</dt><dd><b>{f ? (isRange(f.value) ? fmtRange(f.value) : <Value v={f.value} unit={f.unit} k={f.field_key} />) : <span className="jr-unknown">Unknown</span>}</b> {f && <StatusBadge f={f} />}<div className="jr-sub">Indicative range, not an appraisal.</div>{method && <div className="jr-sub">{method}</div>}</dd></div>
       <div><dt>Comment</dt><dd>{vc.reconstruction_value_comment}</dd></div>
       <div><dt>Market value</dt><dd>{vc.market_value_comment}</dd></div>
       {(vc.missing_valuation_inputs || []).length > 0 && <div><dt>Missing inputs</dt><dd><ul className="jr-list tight">{vc.missing_valuation_inputs.map((x: string, k: number) => <li key={k}>{x}</li>)}</ul></dd></div>}
@@ -498,7 +500,14 @@ function Chip({ id, ix }: { id: string; ix: Index }) {
     </span>
   )
 }
-function StatusBadge({ f }: { f: any }) { const [lab, cls] = STATUS[f.evidence_status] || [f.evidence_status, "grey"]; return <span className={"jr-chip static s-" + cls}>{lab.split(" — ")[0].split(" (")[0]}</span> }
+/** One word per row. The catch-all "Estimated / inferred / declared" (derived_estimate) is replaced by what the row actually is
+ *  (Estimated, Inferred or Declared), read from the upstream status the evidence builder keeps in `method`. */
+function StatusBadge({ f }: { f: any }) {
+  const [lab, cls] = STATUS[f.evidence_status] || [f.evidence_status, "grey"]
+  let t = lab.split(" — ")[0].split(" (")[0]
+  if (f.evidence_status === "derived_estimate") { const up = /upstream status:\s*(\w+)/i.exec(String(f.method || ""))?.[1]; t = up ? up[0].toUpperCase() + up.slice(1).toLowerCase() : /^declared/i.test(String(f.method || "")) ? "Declared" : "Estimated" }
+  return <span className={"jr-chip static s-" + cls}>{t}</span>
+}
 function Value({ v, unit, k, long }: { v: any; unit?: string | null; k: string; long?: boolean }): JSX.Element {
   const s = fmtInline(v, unit) ?? fmtHazard(k, v)
   if (s !== null) return v === null || v === undefined ? <span className="jr-unknown">Unknown</span> : <>{s}</>
