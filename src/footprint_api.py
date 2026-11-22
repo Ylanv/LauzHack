@@ -4,8 +4,6 @@ Same source as the red outline of the report's orthophoto (public_data.footprint
 then the Geneva cadastre by EGID), so the web app frames the insured building and never a neighbour. Public data only:
 no LLM, no credits.
 """
-from functools import lru_cache
-
 from shapely.geometry import mapping, shape
 from shapely.ops import transform
 
@@ -20,9 +18,20 @@ def lv95_to_wgs84(e: float, n: float) -> tuple[float, float]:
     return lon * 100 / 36, lat * 100 / 36
 
 
-@lru_cache(maxsize=256)
+_CACHE: dict[str, dict] = {}   # successes only: a transient failure of geodienste / SITG must not stick to the instance
+
+
 def building_footprint(address: str) -> dict | None:
     """GeoJSON polygon (WGS84) of the building at this address, or None when it cannot be pinned to one building."""
+    if address in _CACHE:
+        return _CACHE[address]
+    fp = _lookup(address)
+    if fp and len(_CACHE) < 256:
+        _CACHE[address] = fp
+    return fp
+
+
+def _lookup(address: str) -> dict | None:
     geo = pd.geocode(address)
     if geo.get("status") != "ok" or not geo.get("house_number_matched"):
         return None   # never frame a neighbour: an unmatched house number gives no footprint

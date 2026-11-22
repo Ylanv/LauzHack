@@ -228,8 +228,8 @@ export const MapFlight = (() => {
     const xs = ring.map((p) => p[0]), ys = ring.map((p) => p[1])
     return { kind: "building", d: 0, name: "", geom, at: [(Math.min(...xs) + Math.max(...xs)) / 2, (Math.min(...ys) + Math.max(...ys)) / 2], t0: -1 }
   }
-  /** zones framed on the map: building white, water blue and forest green (ZC); road and neighbour are not drawn */
-  const SHOWN: Feat["kind"][] = ["building", "water", "forest"]
+  /** zones framed on the map: only the building is framed for now (white); water (blue) and forest (green) are ready in SHOWN; road and neighbour are not drawn */
+  const SHOWN: Feat["kind"][] = ["building"]   // water and forest are read from the tiles too but not framed (add "water", "forest" here to show them)
   const HL: Partial<Record<Feat["kind"], string>> = { building: "#ffffff" }
   const KIND = { building: { col: "#3d52a0", tag: "Building", title: "Your building" }, neighbour: { col: "#3d52a0", tag: "Fire spread", title: "Neighbouring building" }, road: { col: "#7091e6", tag: "Access", title: "Main road" }, water: { col: "#7091e6", tag: "Flood exposure", title: "Water" }, forest: { col: "#8697c4", tag: "Wildfire, storm", title: "Wooded area" } } as const
   const distLabel = (d: number) => (d < 3 ? "adjoining" : d < 100 ? Math.round(d / 5) * 5 + " m" : Math.round(d / 10) * 10 + " m")
