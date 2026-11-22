@@ -106,13 +106,49 @@ Some risk factors exist only in images, so we use a **small, cheap vision-langua
 
 Which small vision model should do this job? We compared 9 serverless vision models on the two image tasks of the pipeline, aerial photo and street facade. All used the same production prompt and JSON schema (`src/prompts.py`).
 
-**Example 1: aerial photo → extracted features** (CMDS SA, Plan-les-Ouates, model GLM-5.3-Flash)
+**Example 1: CMDS SA, Plan-les-Ouates**
 
-<p align="center"><img src="docs/assets/vlm_example_cmds-sa.png" alt="Aerial photo of CMDS SA and the features GLM-5.3-Flash extracted" width="900"></p>
+<table><tr>
+<td width="42%"><img src="benchmark/vlm/images/cmds-sa__orthophoto.jpg" alt="Aerial photo of CMDS SA, Plan-les-Ouates"></td>
+<td>
 
-**Example 2: aerial photo → extracted features** (Jean Gallay SA, Plan-les-Ouates, model GLM-5.3-Flash)
+| Feature | GLM-5.3-Flash output |
+|---|---|
+| Roof | flat_or_low_pitch — light membrane or metal sheet, seams visible |
+| Solar panels | Unknown |
+| Skylights | Unknown |
+| Roof equipment | dark units near southern roof edge |
+| Outdoor storage | Unknown |
+| Neighbours < 10 m | Present |
+| Vegetation at walls | Unknown |
+| To inspect | brown patches on lower south roof section, inspect for debris or corrosion |
 
-<p align="center"><img src="docs/assets/vlm_example_jean-gallay-sa.png" alt="Aerial photo of Jean Gallay SA and the features GLM-5.3-Flash extracted" width="900"></p>
+4.8 s · $0.0006
+
+</td>
+</tr></table>
+
+**Example 2: Jean Gallay SA, Plan-les-Ouates**
+
+<table><tr>
+<td width="42%"><img src="benchmark/vlm/images/jean-gallay-sa__orthophoto.jpg" alt="Aerial photo of Jean Gallay SA, Plan-les-Ouates"></td>
+<td>
+
+| Feature | GLM-5.3-Flash output |
+|---|---|
+| Roof | flat roof — Unknown |
+| Solar panels | Present |
+| Skylights | Present |
+| Roof equipment | white rectangular rooftop structure near north edge, purpose unknown |
+| Outdoor storage | Unknown |
+| Neighbours < 10 m | Present |
+| Vegetation at walls | Possible |
+| To inspect | none reported |
+
+3.1 s · $0.0004
+
+</td>
+</tr></table>
 
 Unknown stays unknown (CMDS: the model does not guess solar panels or storage it cannot see), and possible damage is flagged "to inspect", never as confirmed. The examples are aerial photos only: Street View images cannot be published in a public repository (Google's terms).
 
@@ -123,18 +159,11 @@ Unknown stays unknown (CMDS: the model does not guess solar panels or storage it
 <p align="center"><img src="docs/assets/vlm_benchmark_table.png" alt="Results table per vision model" width="900"></p>
 
 **How we measured quality**
-- **Images:** 8 real images fetched by the pipeline: 4 Geneva buildings (CMDS SA, Jean Gallay SA, Hublot SA, Services Industriels de Genève), each with its aerial orthophoto and its Street View facade. Every model saw every image twice, in fresh calls, for 144 calls in total (≈ $0.77).
-- **Reference labels:** written by visual inspection of each image (`benchmark/vlm/labels.json`), and **only for features that are clearly visible**. Ambiguous features are left out rather than guessed.
-  - **Aerial:** flat roof, solar panels, skylights, neighbours within ~10 m, roof equipment.
-  - **Facade:** facade visible, wall material, outdoor storage along the walls, company sign.
-- **Scoring:** each labelled feature scores 1 when the model's answer matches.
-  - **Partial credit:** "possible" earns 0.5 when the feature is present. "Unknown" earns 0.5 when it is absent, because unknown is cautious but not wrong. A neighbouring material category (e.g. "mixed" for a metal-clad hall) also earns 0.5.
-  - **Zero:** a wrong answer, or invalid JSON.
-  - The **quality** of a model is its average score over all its answers (0–1). Aerial and facade are also shown separately.
-- **Cost and time:**
-  - **Cost:** tokens reported by Together × Together's list price, including the reasoning tokens most of these models generate before answering.
-  - **Time:** wall clock per image.
-- **Limits:** 4 buildings is a small sample, so the scores rank the models rather than measure them precisely. The same model can also vary between two runs on one image. The labels were not made by an underwriter.
+- **Data:** 8 real images from the pipeline (4 Geneva buildings × aerial + facade), each sent twice to every model: 144 calls, $0.77.
+- **Reference:** we labelled by eye only what is clearly visible (`benchmark/vlm/labels.json`): roof type, solar panels, skylights, close neighbours, roof equipment, facade material, outdoor storage, company sign.
+- **Score:** 1 point per correct feature, 0.5 for a cautious answer ("possible" / "unknown" / a close material), 0 if wrong or invalid JSON. Quality = average (0–1).
+- **Cost / time:** Together tokens × list price (reasoning included) · wall clock per image.
+- **Caveat:** 4 buildings is a small sample: read it as a ranking, not a precise measure.
 
 **Result:**
 - **GLM-5.3-Flash** gives the best quality of the small models: 0.79, close to the large Kimi-K3 at 0.83. It costs **$0.0015 per building** (≈ 50× cheaper than Kimi-K3) at 6 s per image.

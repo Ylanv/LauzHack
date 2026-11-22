@@ -232,8 +232,6 @@ def readme_assets():
     ASSETS.mkdir(parents=True, exist_ok=True)
     _shot_trim(chart, ASSETS / "vlm_benchmark_chart.png", height=560)
     _shot_trim(table, ASSETS / "vlm_benchmark_table.png", height=120 + 60 * len(rows))
-    for case in ("cmds-sa", "jean-gallay-sa"):
-        _shot_trim(example_card(case), ASSETS / f"vlm_example_{case}.png", height=1100)
     print("written:", sorted(p.name for p in ASSETS.glob("vlm_*.png")))
 
 
