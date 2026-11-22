@@ -100,9 +100,79 @@ Some risk factors exist only in images, so we use a **small, cheap vision-langua
 - **Low output.** Capped outputs (`max_tokens` 700–1,400) and a "never invent, unknown stays unknown" system prompt.
 - **Cached per image,** so re-running a building costs nothing.
 
-**Measured cost: about 2,600–2,800 input and 900–1,000 output tokens for all three calls, ≈ $0.0006–0.0007 per building** (`etl` in `metrics.json` of the [example reports](examples/reports/)). We have not yet benchmarked other vision models on these three tasks.
+**Measured cost: about 2,600–2,800 input and 900–1,000 output tokens for all three calls, ≈ $0.0006–0.0007 per building** (`etl` in `metrics.json` of the [example reports](examples/reports/)).
+
+### Vision model benchmark
+
+Which small vision model should do this job? We compared 9 serverless vision models on the two image tasks of the pipeline, aerial photo and street facade. All used the same production prompt and JSON schema (`src/prompts.py`).
+
+**Example 1: CMDS SA, Plan-les-Ouates**
+
+<table><tr>
+<td width="42%"><img src="benchmark/vlm/images/cmds-sa__orthophoto.jpg" alt="Aerial photo of CMDS SA, Plan-les-Ouates"></td>
+<td>
+
+| Feature | GLM-5.3-Flash output |
+|---|---|
+| Roof | flat_or_low_pitch — light membrane or metal sheet, seams visible |
+| Solar panels | Unknown |
+| Skylights | Unknown |
+| Roof equipment | dark units near southern roof edge |
+| Outdoor storage | Unknown |
+| Neighbours < 10 m | Present |
+| Vegetation at walls | Unknown |
+| To inspect | brown patches on lower south roof section, inspect for debris or corrosion |
+
+4.8 s · $0.0006
+
+</td>
+</tr></table>
+
+**Example 2: Jean Gallay SA, Plan-les-Ouates**
+
+<table><tr>
+<td width="42%"><img src="benchmark/vlm/images/jean-gallay-sa__orthophoto.jpg" alt="Aerial photo of Jean Gallay SA, Plan-les-Ouates"></td>
+<td>
+
+| Feature | GLM-5.3-Flash output |
+|---|---|
+| Roof | flat roof — Unknown |
+| Solar panels | Present |
+| Skylights | Present |
+| Roof equipment | white rectangular rooftop structure near north edge, purpose unknown |
+| Outdoor storage | Unknown |
+| Neighbours < 10 m | Present |
+| Vegetation at walls | Possible |
+| To inspect | none reported |
+
+3.1 s · $0.0004
+
+</td>
+</tr></table>
+
+Unknown stays unknown (CMDS: the model does not guess solar panels or storage it cannot see), and possible damage is flagged "to inspect", never as confirmed. The examples are aerial photos only: Street View images cannot be published in a public repository (Google's terms).
+
+**Quality vs cost and speed** (upper-left is better):
+
+<p align="center"><img src="docs/assets/vlm_benchmark_chart.png" alt="Quality vs cost per building and vs time per image, per vision model" width="900"></p>
+
+**How we measured quality**
+- **Data:** 8 real images from the pipeline (4 Geneva buildings × aerial + facade), each sent twice to every model: 144 calls, $0.77.
+- **Reference:** we labelled by eye only what is clearly visible (`benchmark/vlm/labels.json`): roof type, solar panels, skylights, close neighbours, roof equipment, facade material, outdoor storage, company sign.
+- **Score:** 1 point per correct feature, 0.5 for a cautious answer ("possible" / "unknown" / a close material), 0 if wrong or invalid JSON. Quality = average (0–1).
+- **Cost / time:** Together tokens × list price (reasoning included) · wall clock per image.
+- **Caveat:** 4 buildings is a small sample: read it as a ranking, not a precise measure.
+
+**Result:**
+- **GLM-5.3-Flash** gives the best quality of the small models: 0.79, close to the large Kimi-K3 at 0.83. It costs **$0.0015 per building** (≈ 50× cheaper than Kimi-K3) at 6 s per image.
+- **MiniMax-M3.1-Flash** is the fastest and cheapest valid option, at 2.2 s and $0.0005 per building, with quality 0.73.
+
+Reproduce: `python -m benchmark.vlm.run`, then `python -m benchmark.vlm.report --readme`.
 
 ---
+
+
+
 
 ## Report generation
 

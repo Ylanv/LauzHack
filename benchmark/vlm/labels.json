@@ -1,0 +1,29 @@
+{
+  "_doc": "Reference labels for the VLM benchmark, written by visual inspection of each image (Claude, 2026-11-22) — to be checked by the team. Only fields that are clearly visible are labelled; ambiguous fields are left out and not scored. Presence fields: present | absent. Material: accepted values with credit (1 = correct, 0.5 = partly right).",
+  "cases": {
+    "cmds-sa": {"company": "CMDS SA", "address": "Rue du Champ-Blanchod 7, 1228 Plan-les-Ouates"},
+    "jean-gallay-sa": {"company": "Jean Gallay SA", "address": "Chemin du Pont-du-Centenaire 108, 1228 Plan-les-Ouates"},
+    "hublot-sa": {"company": "Hublot SA", "address": "Route de Chancy 6, 1213 Petit-Lancy"},
+    "sig": {"company": "Services industriels de Genève", "address": "Chemin du Château-Bloch 2, 1219 Le Lignon"}
+  },
+  "aerial": {
+    "cmds-sa": {"roof_flat": true, "pv_panels": "absent", "skylights": "absent", "neighbouring_buildings_close": "present", "roof_equipment_any": true,
+                "_notes": "flat light membrane roof, vents at the south edge, discoloured strip; the skylight row is on the neighbouring section outside the red outline"},
+    "jean-gallay-sa": {"roof_flat": true, "pv_panels": "present", "skylights": "present", "neighbouring_buildings_close": "absent",
+                       "_notes": "large flat roof fully covered with PV, rows of domed skylights; road and parking around"},
+    "hublot-sa": {"roof_flat": true, "pv_panels": "absent", "neighbouring_buildings_close": "present", "roof_equipment_any": true,
+                  "_notes": "flat dark roof with large HVAC ducts; the panels at the north-east are outside the outline; house within ~10 m"},
+    "sig": {"roof_flat": true, "pv_panels": "present", "skylights": "present", "neighbouring_buildings_close": "present", "roof_equipment_any": true,
+            "_notes": "campus of flat roofs with PV, glazed atrium strips; several wings outlined"}
+  },
+  "facade": {
+    "cmds-sa": {"facade_visible": true, "construction_material": {"metal_cladding": 1, "mixed": 0.5}, "outdoor_storage": "present", "signage_matches_company": "yes",
+                "_notes": "ribbed metal hall, glass office block on the right; racks, bins, forklift in front; CMDS sign top left"},
+    "jean-gallay-sa": {"facade_visible": true, "construction_material": {"metal_cladding": 1, "mixed": 0.5}, "outdoor_storage": "absent",
+                       "_notes": "yellow ribbed metal cladding, partly behind a tree and a fence"},
+    "hublot-sa": {"facade_visible": true, "construction_material": {"concrete": 1, "mixed": 0.5}, "outdoor_storage": "absent", "signage_matches_company": "no_sign_visible",
+                  "_notes": "precast concrete facade above a concrete wall; no company sign"},
+    "sig": {"facade_visible": true, "construction_material": {"mixed": 1, "glass_curtain_wall": 0.5, "concrete": 0.5}, "outdoor_storage": "absent", "signage_matches_company": "yes",
+            "_notes": "concrete and glass office block with a red steel canopy; 'SIG' direction signs"}
+  }
+}
