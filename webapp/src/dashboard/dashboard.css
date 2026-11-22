@@ -194,3 +194,4 @@ body{background:var(--canvas)}
 .jr-main{padding-bottom:170px}
 .jr-buddy{width:180px;height:180px;right:8px;bottom:0}
 .jr-main{padding-bottom:200px}
+.jr-brand .brand-logo{width:28px;height:28px;border-radius:6px;image-rendering:pixelated;flex:none;display:block}

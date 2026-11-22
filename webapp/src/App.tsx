@@ -11,6 +11,7 @@ import { clamp, reducedMotion } from "./lib/utils"
 import { MOCK, INSIGHTS, DEMO_INDUSTRIES } from "./pipeline/mock"
 import { DEMO, getIndustries, getFootprint, streamReport, progressError, AssessError, type ReportProgress } from "./pipeline"
 import type { Coords, FlightInput, RequestInput, StepId } from "./pipeline/types"
+import { Wordmark } from "./brand/Brand"
 
 const STAGE_LABEL: Record<string, string> = {
   etl: "Collecting building and company data",
@@ -215,8 +216,7 @@ export default function App() {
       <div className="vh" aria-live="polite">{live}</div>
       <div className="shell" style={{ visibility: screen === "proc" ? "hidden" : undefined }}>
         <header className="brand">
-          <i><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinejoin="round" strokeLinecap="round"><path d="M3 11l9-7 9 7v9H3z" /><path d="M9 20v-6h6v6" /></svg></i>
-          AXAlotl<span>Building insurance</span>
+          <Wordmark size={26} /><span>Building insurance</span>
         </header>
         <main>
           {screen === "form" && <FormScreen key={formKey} onSubmit={start} say={say} initial={formInit} serverError={serverError} />}
