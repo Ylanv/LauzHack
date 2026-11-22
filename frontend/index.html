@@ -58,7 +58,6 @@
       <div><label for="company">Raison sociale exacte (registre du commerce)</label><input id="company" required placeholder="CMDS SA"></div>
       <div><label for="address">Adresse du bâtiment à Genève</label><input id="address" required placeholder="Rue du Champ-Blanchod 7, 1228 Plan-les-Ouates"></div>
       <div><label for="industry">Type d'industrie</label><select id="industry" required></select></div>
-      <div><label for="code">Code d'accès</label><input id="code" type="password" autocomplete="off"></div>
       <div><button id="go" type="submit">Analyser le bâtiment</button></div>
     </form>
     <div class="examples hint">Exemples :
@@ -119,7 +118,6 @@ function fmt(v) {
 fetch("/api/industries").then(r => r.json()).then(list => {
   $("industry").innerHTML = list.map(i => `<option value="${i.key}">${esc(i.label)}</option>`).join("");
 });
-$("code").value = localStorage.getItem("axa_code") || "";
 document.querySelectorAll("[data-ex]").forEach(b => b.onclick = () => {
   const [c, a, i] = JSON.parse(b.dataset.ex); $("company").value = c; $("address").value = a; $("industry").value = i;
 });
@@ -127,13 +125,12 @@ $("zoom").onclick = () => $("zoom").close();
 
 $("form").onsubmit = async e => {
   e.preventDefault();
-  localStorage.setItem("axa_code", $("code").value);
   $("go").disabled = true; $("result").classList.add("hidden");
   const st = $("status"); st.className = "card"; st.innerHTML = '<span class="spinner"></span>Analyse en cours…';
   const t0 = performance.now();
   try {
     const r = await fetch("/api/llm-input", {
-      method: "POST", headers: {"Content-Type": "application/json", "X-Access-Code": $("code").value},
+      method: "POST", headers: {"Content-Type": "application/json"},
       body: JSON.stringify({client_name: $("client_name").value, company_legal_name: $("company").value,
                             address: $("address").value, industry_type: $("industry").value}),
     });

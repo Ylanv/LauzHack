@@ -2,9 +2,9 @@
 // Data contract: docs/FRONTEND_INTEGRATION.md. Narrative from output.json; every value, source, image and status from
 // features_combined.json. Never linked from the client app.
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import {
-  buildIndex, resolve, humanise, fmtInline, fmtHazard, fmtRange, fmtShare, isRange, isSynthetic, loadFromApi,
+  buildIndex, resolve, humanise, fmtInline, fmtHazard, fmtRange, fmtShare, isRange, isSynthetic, loadFromApi, type LoadProblem,
   READINESS, STATUS, PRICING, TARGET, PRIORITY_ORDER, FINDING_TYPE, type CaseData, type Index,
 } from "./data"
 import DeskCompanion, { type DeskLine } from "./DeskCompanion"
@@ -29,15 +29,25 @@ const keyOf = (c: CaseData) => String(c.output?.case_id || c.bundle?.case?.case_
 
 export default function Dashboard() {
   const [cases, setCases] = useState<CaseData[] | null>(null)
+  const [problem, setProblem] = useState<{ kind: LoadProblem; detail?: string } | null>(null)
   const [open, setOpen] = useState<string | null>(() => new URLSearchParams(location.search).get("case"))
   const [queue, setQueue] = useState<Queue>("open")
   const [, bump] = useState(0)   // re-render after a ticket change
-  // the ticket list comes straight from the report folders; it refreshes itself every 20 s (new or finished tickets)
-  useEffect(() => {
-    const load = () => loadFromApi().then((c) => setCases((p) => c ?? p ?? []))
-    load(); const id = setInterval(load, 20000)
-    return () => clearInterval(id)
+  // the ticket list comes straight from the report folders; it refreshes itself every 20 s (new or finished tickets).
+  // A failed refresh never empties a loaded list; with nothing loaded yet, the problem is shown and retried after 5 s.
+  const retry = useRef<number | undefined>(undefined)
+  const load = useCallback(() => {
+    clearTimeout(retry.current)
+    return loadFromApi().then((r) => {
+      if ("cases" in r) { setCases(r.cases); setProblem(null); return }
+      setProblem({ kind: r.problem, detail: r.detail })
+      retry.current = window.setTimeout(load, 5000)
+    })
   }, [])
+  useEffect(() => {
+    load(); const id = setInterval(load, 20000)
+    return () => { clearInterval(id); clearTimeout(retry.current) }
+  }, [load])
   useEffect(() => { const u = new URL(location.href); if (open) u.searchParams.set("case", open); else u.searchParams.delete("case"); history.replaceState(null, "", u) }, [open])
   // the companion: what it says, with the matching emotion
   const [line, setLine] = useState<DeskLine | null>(null)
@@ -94,7 +104,11 @@ export default function Dashboard() {
         ))}</nav>
       </aside>
       <main className="jr-main">
-        {!cases ? <p className="jr-muted">Loading…</p>
+        {cases && problem && <p className="jr-notice">Connection problem: showing the last loaded list, retrying…</p>}
+        {!cases ? (problem
+            ? <p className="jr-notice">Could not load the reports ({problem.kind === "network" ? "the report service is not reachable" : problem.detail || "server error"}). Retrying…</p>
+            : <p className="jr-muted">Loading…</p>)
+          : !cases.length && !current ? <p className="jr-empty">No report yet. Reports appear here as soon as a request submitted from the client app is finished.</p>
           : current ? <Issue c={current.c} t={current.t} s={current.s} onBack={() => setOpen(null)} update={(p) => update(current.c.id, p)} queueLabel={QUEUES.find(([q]) => q === queue)![1]} />
           : <QueueView rows={rows.filter((x) => inQueue(queue, x.s, x.t))} title={QUEUES.find(([q]) => q === queue)![1]} onOpen={setOpen} update={update} />}
       </main>

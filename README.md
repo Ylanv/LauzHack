@@ -206,12 +206,12 @@ Each folder contains `output.json` (the report), `features_combined.json` (evide
 
 ```bash
 python -m venv .venv && .venv/bin/pip install -r requirements.txt uvicorn
-cp .env.example .env                      # set LLM_API_KEY (OpenRouter), GOOGLE_MAPS_API_KEY, ACCESS_CODE
+cp .env.example .env                      # set LLM_API_KEY (OpenRouter), GOOGLE_MAPS_API_KEY
 .venv/bin/python -m src.report --input schemas/INPUT/example.customer_request.json --output reports/cmds-sa
 .venv/bin/python -m src.report --metrics reports/cmds-sa     # tokens, cost, time
 ```
 
-- **API:** `uvicorn src.main:app --reload` → `POST /api/reports/stream` (live report with streamed progress), `GET /api/cases` (stored reports). The access code is sent in the `X-Access-Code` header.
+- **API:** `uvicorn src.main:app --reload` → `POST /api/reports/stream` (live report with streamed progress), `GET /api/cases` (stored reports).
 - **Web app and dashboard:** `cd webapp && npm install && npx vite` (see [`docs/WEBAPP.md`](docs/WEBAPP.md)).
 - **Deployment:** two Vercel projects deploy on every push to `main`: the backend (`lauz-hack`) and the web app (`lauz-hack-webapp`, root `webapp/`). Online reports are stored in a private Vercel Blob store. See [`docs/DEPLOY_VERCEL.md`](docs/DEPLOY_VERCEL.md).
 - **Data contracts:** [`schemas/README.md`](schemas/README.md) (INPUT → FEATURE → COMBINED_FEATURE → OUTPUT).
