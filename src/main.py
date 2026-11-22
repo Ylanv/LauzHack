@@ -119,7 +119,9 @@ def _new_job(req: "LlmInputRequest") -> tuple[str, Path, threading.Thread]:
     _JOBS[job_id] = out
     def run_job() -> None:
         try:
-            report_pipeline.run(doc, out)
+            met = report_pipeline.run(doc, out)
+            if _input_rejected(met):   # unknown company / address / out of scope: the client is told, the team gets no ticket
+                return
             _store_job(job_id, out)
         except Exception:
             logging.getLogger(__name__).exception("Report job %s failed", job_id)
@@ -227,6 +229,19 @@ _CASES_CACHE: dict = {"t": None, "ids": []}   # t = time.monotonic() of the last
 _FILE_CACHE: dict[str, bytes] = {}
 
 
+def _read_metrics(folder: Path) -> dict | None:
+    try:
+        return _json.loads((folder / "metrics.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+
+
+def _input_rejected(met: dict | None) -> bool:
+    """The job failed because the request itself was refused (company not found, house number unknown, out of scope).
+    That is a user error, not a case to underwrite: no Blob upload and not listed in the dashboard."""
+    return bool(met) and met.get("status") == "failed" and str((met.get("error") or {}).get("message", "")).startswith("input rejected")
+
+
 def _store_job(job_id: str, out: Path, only_images: bool = False) -> None:
     """Uploads a finished job's files (report, evidence, metrics, images) to the private Blob store. Never fails the job.
     only_images: just the photos, as soon as they are written (the web app shows them before the report is done)."""
@@ -256,7 +271,7 @@ def list_cases() -> list[str]:
             ids = [e.prefix.rstrip("/").split("/")[-1] for e in blob.query_blob_entries(prefix="reports/")
                    if isinstance(e, blob.BlobPrefix)]
         else:
-            ids = [d.name for d in REPORTS_DIR.iterdir() if d.is_dir()] if REPORTS_DIR.exists() else []
+            ids = [d.name for d in REPORTS_DIR.iterdir() if d.is_dir() and not _input_rejected(_read_metrics(d))] if REPORTS_DIR.exists() else []
         _CASES_CACHE.update(t=_time.monotonic(), ids=sorted(ids, key=lambda i: i.split("-")[-3:-1], reverse=True))
     return _CASES_CACHE["ids"]
 
