@@ -1,0 +1,376 @@
+{
+  "schema_version": "1.0",
+  "case_id": "cmds-sa",
+  "executive_summary": {
+    "headline": "Underwriting Review for CMDS SA Metal Workshop Facility",
+    "overview": "The risk relates to a commercial building constructed in 1999 located in Plan-les-Ouates, Geneva, housing CMDS SA (metalworking and custom locksmith operations). Official registers verify the construction year and building footprint, while visual evidence confirms metal cladding and exterior storage of metal frames and equipment. Key fire protection details, loss history, and electrical/plumbing conditions are currently unverified, requiring targeted confirmation before final underwriting.",
+    "underwriting_readiness": "requires_clarification",
+    "key_takeaway": "Initial technical data is established, but outstanding fire protection and internal installation data gaps must be resolved.",
+    "critical_fact_ids": [
+      "feat.building_usage",
+      "feat.construction_year",
+      "feat.business_sector",
+      "feat.gas_installations"
+    ]
+  },
+  "cope": {
+    "construction": {
+      "headline": "1999 Single-Floor Industrial Building with Metal Cladding",
+      "interpretation": "The structure was built in 1999, features one official ground floor with a flat membrane roof and skylights, and incorporates ribbed metal cladding on the facade. Official records indicate an intermediate state with no major recorded renovations since construction.",
+      "fact_ids": [
+        "feat.construction_year",
+        "feat.construction_material",
+        "feat.number_of_floors",
+        "feat.roof_type_material"
+      ],
+      "evidence_ids": [
+        "src_2",
+        "src_6",
+        "src_7",
+        "src_10"
+      ],
+      "unknown_feature_ids": []
+    },
+    "occupancy": {
+      "headline": "Metalworking Workshop Operated by CMDS SA",
+      "interpretation": "The commercial occupant is CMDS SA, active in NOGA sector 256201 (mechanical workshops and metal construction), with 10-19 workers. Industrial activities involve custom metal fabrication, locksmith work, and potential high-temperature operations.",
+      "fact_ids": [
+        "feat.building_usage",
+        "feat.business_sector",
+        "feat.site_industrial_processes",
+        "feat.high_temperature_operations"
+      ],
+      "evidence_ids": [
+        "src_1",
+        "src_8",
+        "src_10",
+        "src_11"
+      ],
+      "unknown_feature_ids": []
+    },
+    "protection": {
+      "headline": "Active Gas Boiler Installation with Unverified Active Protections",
+      "interpretation": "The building utilizes an active gas boiler installed in 2019 with a power rating of 49 kW. However, crucial active and passive fire protection details—such as sprinklers, alarm systems, and compartmentation—remain entirely unverified.",
+      "fact_ids": [
+        "feat.gas_installations"
+      ],
+      "evidence_ids": [
+        "src_10"
+      ],
+      "unknown_feature_ids": [
+        "feat.sprinklers",
+        "feat.fire_alarm_detection",
+        "feat.fire_compartmentation",
+        "feat.fire_protection_inspections"
+      ]
+    },
+    "exposure": {
+      "headline": "Low Natural Hazard Exposure with Surface Runoff Potential",
+      "interpretation": "The building footprint is located outside official flood and landslide hazard zones. Earthquake exposure is classified as SIA 261 zone Z1b on soil class E. Surface runoff affects approximately 24% of the perimeter with estimated depths up to 25 cm.",
+      "fact_ids": [
+        "feat.earthquake_exposure",
+        "feat.flood_exposure",
+        "feat.surface_runoff_exposure",
+        "feat.hail_exposure",
+        "feat.landslide_exposure"
+      ],
+      "evidence_ids": [
+        "src_4",
+        "src_5"
+      ],
+      "unknown_feature_ids": []
+    }
+  },
+  "priority_findings": [
+    {
+      "id": "find_fire_protection_gap",
+      "title": "Unverified Fire Protection and Detection Systems",
+      "priority": "high",
+      "finding_type": "data_gap",
+      "observation": "No data is currently recorded regarding the presence or absence of sprinklers, fire alarm detection systems, or proper fire compartmentation within the workshop premises.",
+      "underwriting_implication": "Metal fabrication and locksmith activities involve ignition sources and combustible materials, making active detection and suppression critical for limiting loss severity.",
+      "recommended_action": "Request a formal fire safety questionnaire and technical inspection report from the client.",
+      "confidence": "high",
+      "fact_ids": [],
+      "evidence_ids": [],
+      "coverage_components": [
+        "fire"
+      ]
+    },
+    {
+      "id": "find_industrial_operations",
+      "title": "Industrial Metalworking Operations and Hot Work",
+      "priority": "high",
+      "finding_type": "potential_exposure",
+      "observation": "Commercial registers and client declarations confirm the site operates as a mechanical workshop (NOGA 256201) specializing in metal structures and locksmith work.",
+      "underwriting_implication": "Welding, cutting, and high-temperature machining elevate the risk of fire and thermal damage if safety protocols are not enforced.",
+      "recommended_action": "Confirm adherence to strict hot work safety procedures and inquire about flammable material storage.",
+      "confidence": "high",
+      "fact_ids": [
+        "feat.business_sector",
+        "feat.site_industrial_processes",
+        "feat.high_temperature_operations"
+      ],
+      "evidence_ids": [
+        "src_8",
+        "src_10",
+        "src_11"
+      ],
+      "coverage_components": [
+        "fire"
+      ]
+    },
+    {
+      "id": "find_outdoor_storage",
+      "title": "Outdoor Storage Near Building Facade",
+      "priority": "medium",
+      "finding_type": "confirmed_exposure",
+      "observation": "Street-level imagery reveals pallets, metal frames, and a forklift stationed directly outside the building exterior.",
+      "underwriting_implication": "Combustible packaging or materials stored near exterior walls can facilitate fire spread toward the building envelope.",
+      "recommended_action": "Verify safe clearance distances between outdoor storage and building openings.",
+      "confidence": "medium",
+      "fact_ids": [
+        "feat.flammable_material_storage"
+      ],
+      "evidence_ids": [
+        "src_7"
+      ],
+      "coverage_components": [
+        "fire"
+      ]
+    },
+    {
+      "id": "find_surface_runoff",
+      "title": "Surface Runoff Exposure along Perimeter",
+      "priority": "medium",
+      "finding_type": "confirmed_exposure",
+      "observation": "Geodata indicates that 23.8% of the building perimeter lies within a surface runoff zone with potential water depths reaching 10 to 25 cm.",
+      "underwriting_implication": "Intense rainfall could cause localized water ingress, risking lower-level inventory and equipment.",
+      "recommended_action": "Ensure ground-level openings and thresholds are elevated or protected against surface water accumulation.",
+      "confidence": "high",
+      "fact_ids": [
+        "feat.surface_runoff_exposure"
+      ],
+      "evidence_ids": [
+        "src_4"
+      ],
+      "coverage_components": [
+        "regulated_natural_hazards",
+        "water_optional"
+      ]
+    },
+    {
+      "id": "find_maintenance_gaps",
+      "title": "Unverified Utility and Installation Conditions",
+      "priority": "medium",
+      "finding_type": "data_gap",
+      "observation": "Electrical installations, plumbing/pipe conditions, and prior loss history remain completely unverified in the underwriting file.",
+      "underwriting_implication": "Undocumented electrical or plumbing degradation increases the latent risk of water escape and electrical fire incidents.",
+      "recommended_action": "Obtain recent electrical safety inspection certificates and historical loss statements.",
+      "confidence": "high",
+      "fact_ids": [],
+      "evidence_ids": [],
+      "coverage_components": [
+        "fire",
+        "water_optional"
+      ]
+    }
+  ],
+  "hazard_interpretations": [
+    {
+      "peril": "fire",
+      "interpretation": "Standard commercial fire underwriting applies, driven by metalworking operations, gas heating, and unverified fire protection systems.",
+      "pricing_role": "potential_individual_pricing_input",
+      "fact_ids": [
+        "feat.business_sector",
+        "feat.gas_installations"
+      ],
+      "evidence_ids": [
+        "src_10",
+        "src_11"
+      ],
+      "follow_up_needed": true
+    },
+    {
+      "peril": "river_flood",
+      "interpretation": "Building footprint is located outside mapped river flood hazard zones according to official cantonal data.",
+      "pricing_role": "regulated_component_underwriting_only",
+      "fact_ids": [
+        "feat.flood_exposure"
+      ],
+      "evidence_ids": [
+        "src_5"
+      ],
+      "follow_up_needed": false
+    },
+    {
+      "peril": "surface_runoff",
+      "interpretation": "Approximately 24% of the building perimeter is exposed to surface runoff with modeled depths of 10-25 cm.",
+      "pricing_role": "regulated_component_underwriting_only",
+      "fact_ids": [
+        "feat.surface_runoff_exposure"
+      ],
+      "evidence_ids": [
+        "src_4"
+      ],
+      "follow_up_needed": true
+    },
+    {
+      "peril": "earthquake",
+      "interpretation": "Located in SIA 261 seismic zone Z1b on soil class E, requiring standard structural consideration for commercial policies.",
+      "pricing_role": "potential_individual_pricing_input",
+      "fact_ids": [
+        "feat.earthquake_exposure"
+      ],
+      "evidence_ids": [
+        "src_4"
+      ],
+      "follow_up_needed": false
+    },
+    {
+      "peril": "hail",
+      "interpretation": "Exposed to a 50-year hail reference value of 3.0 cm, subject to regulated natural hazard guidelines.",
+      "pricing_role": "regulated_component_underwriting_only",
+      "fact_ids": [
+        "feat.hail_exposure"
+      ],
+      "evidence_ids": [
+        "src_4"
+      ],
+      "follow_up_needed": false
+    },
+    {
+      "peril": "landslide",
+      "interpretation": "Building is situated outside mapped landslide hazard zones based on official cantonal records.",
+      "pricing_role": "regulated_component_underwriting_only",
+      "fact_ids": [
+        "feat.landslide_exposure"
+      ],
+      "evidence_ids": [
+        "src_5"
+      ],
+      "follow_up_needed": false
+    },
+    {
+      "peril": "water_escape",
+      "interpretation": "Water escape risk must be evaluated based on internal plumbing age and condition, which are currently unverified.",
+      "pricing_role": "coverage_dependent",
+      "fact_ids": [],
+      "evidence_ids": [],
+      "follow_up_needed": true
+    }
+  ],
+  "valuation_commentary": {
+    "reconstruction_value_comment": "The estimated whole-building reconstruction value is CHF 2,200,000 (range CHF 1,600,000 to CHF 2,800,000), derived from an estimated volume of 4,004 m³ at standard industrial replacement costs of CHF 400–700/m³. This represents the entire building, and the insured sum must be tailored to the client's specific premises share.",
+    "market_value_comment": "Market value is not formally established and requires client property valuation declarations for precise financial underwriting.",
+    "missing_valuation_inputs": [
+      "Exact insured surface area and floor plans occupied by CMDS SA",
+      "Client-declared building and contents replacement values"
+    ],
+    "fact_ids": [
+      "feat.reconstruction_value_chf"
+    ]
+  },
+  "visual_evidence": [
+    {
+      "visual_id": "vis.facade_streetview",
+      "title": "Street-Level Facade View",
+      "caption": "View of the street-level facade displaying metal cladding and outdoor storage of equipment.",
+      "underwriting_relevance": "Confirms exterior construction materials and identifies potential fire spread hazards from outdoor storage.",
+      "annotation_ids": [],
+      "fact_ids": [
+        "feat.construction_material",
+        "feat.flammable_material_storage"
+      ]
+    },
+    {
+      "visual_id": "vis.orthophoto",
+      "title": "Aerial Orthophoto",
+      "caption": "Aerial view showing the flat membrane roof, skylights, and rooftop equipment.",
+      "underwriting_relevance": "Validates roof configuration, membrane material condition, and proximity of adjacent structures.",
+      "annotation_ids": [],
+      "fact_ids": [
+        "feat.roof_type_material",
+        "feat.potential_repair_needs"
+      ]
+    }
+  ],
+  "open_questions": [
+    {
+      "id": "oq_fire_protection",
+      "priority": "critical",
+      "question": "What active fire protection installations (sprinklers, fire alarms, smoke extraction) are present in the workshop?",
+      "reason_for_underwriter": "Essential to evaluate loss mitigation for industrial metalworking activities.",
+      "expected_answer_or_document": "Fire safety equipment inventory or inspection certificate",
+      "target": "client",
+      "feature_ids": [
+        "feat.sprinklers",
+        "feat.fire_alarm_detection",
+        "feat.fire_protection_inspections"
+      ],
+      "trigger_finding_ids": [
+        "find_fire_protection_gap"
+      ],
+      "blocking_initial_pricing": true
+    },
+    {
+      "id": "oq_compartmentation",
+      "priority": "high",
+      "question": "Are there fire-rated compartment walls separating CMDS SA from other occupants in the shared building footprint?",
+      "reason_for_underwriter": "Determines fire spread risk between different industrial tenants.",
+      "expected_answer_or_document": "Architectural floor plans or compartmentation certification",
+      "target": "client",
+      "feature_ids": [
+        "feat.fire_compartmentation"
+      ],
+      "trigger_finding_ids": [
+        "find_fire_protection_gap"
+      ],
+      "blocking_initial_pricing": false
+    },
+    {
+      "id": "oq_loss_history",
+      "priority": "high",
+      "question": "Has the company experienced any property or water damage losses at this site over the past 5 years?",
+      "reason_for_underwriter": "Historical loss frequency directly impacts underwriting risk profile and pricing.",
+      "expected_answer_or_document": "Loss history statement signed by the insured",
+      "target": "client",
+      "feature_ids": [
+        "feat.prior_losses"
+      ],
+      "trigger_finding_ids": [],
+      "blocking_initial_pricing": false
+    },
+    {
+      "id": "oq_electrical_condition",
+      "priority": "medium",
+      "question": "When was the last official electrical safety inspection (NIBT / OIBT) performed for the premises?",
+      "reason_for_underwriter": "Verifies the safety and compliance of electrical installations powering industrial machinery.",
+      "expected_answer_or_document": "Valid electrical safety periodic inspection report (Sibat / OIBT)",
+      "target": "client",
+      "feature_ids": [
+        "feat.electrical_installation_condition"
+      ],
+      "trigger_finding_ids": [
+        "find_maintenance_gaps"
+      ],
+      "blocking_initial_pricing": false
+    },
+    {
+      "id": "oq_pipe_condition",
+      "priority": "medium",
+      "question": "What is the age and condition of the internal plumbing and water supply networks?",
+      "reason_for_underwriter": "Assesses water escape vulnerability and potential severity of water damage claims.",
+      "expected_answer_or_document": "Maintenance records or plumbing inspection confirmation",
+      "target": "client",
+      "feature_ids": [
+        "feat.pipe_condition"
+      ],
+      "trigger_finding_ids": [
+        "find_maintenance_gaps"
+      ],
+      "blocking_initial_pricing": false
+    }
+  ],
+  "underwriter_next_step": "Initiate communication with the client to obtain the critical fire safety questionnaire, electrical inspection certificate, and loss history statement before proceeding to final premium quotation."
+}

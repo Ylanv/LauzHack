@@ -1,0 +1,119 @@
+{
+  "schema_version": "1.0-report-metrics",
+  "started_at": "2026-11-22T08:11:35+00:00",
+  "model_config": "openrouter_gemini35flash_lite",
+  "stages": [
+    {
+      "stage": "etl",
+      "status": "ok",
+      "duration_ms": 22080,
+      "evidence_blocks": {
+        "public_data": null,
+        "aerial_image": "ok",
+        "facade": "ok",
+        "website": "ok"
+      },
+      "detail": "all evidence blocks ok"
+    },
+    {
+      "stage": "features",
+      "status": "ok",
+      "duration_ms": 29,
+      "warnings": [],
+      "detail": "36 facts, 11 sources, 5 visuals, 7 unknown"
+    },
+    {
+      "stage": "llm",
+      "status": "ok",
+      "duration_ms": 11542,
+      "detail": "openrouter_gemini35flash_lite: 1 generation(s)",
+      "error": null
+    },
+    {
+      "stage": "validate",
+      "status": "ok",
+      "duration_ms": 1,
+      "detail": "0 errors, 0 warnings"
+    }
+  ],
+  "status": "succeeded",
+  "pricing_source": "models/configs.json (prices copied from models/catalog.json, verified 2026-11-21)",
+  "input_kind": "INPUT",
+  "etl": {
+    "vision_calls": 3,
+    "tokens_input": 2621,
+    "tokens_output": 923,
+    "reasoning_tokens": 0,
+    "usd": 0.0006313,
+    "usd_source": "openrouter",
+    "external_calls": {
+      "google_streetview_metadata": 1,
+      "google_streetview_images": 1
+    },
+    "duration_ms": 20897
+  },
+  "case_id": "cmds-sa",
+  "synthetic": false,
+  "llm_estimate": {
+    "input_tokens_estimate": 17050,
+    "output_tokens_estimate": 9000,
+    "usd_estimate": 0.0276,
+    "label": "ESTIMATE (pre-call)"
+  },
+  "pricing_usd_per_mtok": {
+    "input": 0.3,
+    "output": 2.5
+  },
+  "llm_calls": [
+    {
+      "stage": "generate",
+      "provider": "openrouter",
+      "model": "google/gemini-3.5-flash-lite",
+      "model_reported": "google/gemini-3.5-flash-lite",
+      "started_at": "2026-11-22T08:11:57+00:00",
+      "latency_s": 11.51,
+      "api_calls": 1,
+      "http_attempts": 1,
+      "retries": 0,
+      "repair_attempts": 0,
+      "truncation_retries": 0,
+      "input_tokens": 15057,
+      "output_tokens": 4088,
+      "reasoning_tokens": 0,
+      "reasoning_tokens_note": null,
+      "cache_read_tokens": 0,
+      "cache_write_tokens": 0,
+      "usd_estimated": 0.014737,
+      "usd_billed": 0.014737,
+      "usd_billed_note": null,
+      "structured_mode": "json_schema",
+      "finish_reason": "stop",
+      "schema_valid": true,
+      "schema_valid_first_try": true,
+      "error": null,
+      "token_source": "provider-reported usage"
+    }
+  ],
+  "llm": {
+    "api_calls": 1,
+    "retries": 0,
+    "input_tokens": 15057,
+    "output_tokens": 4088,
+    "cache_read_tokens": 0,
+    "cache_write_tokens": 0,
+    "latency_s": 11.51,
+    "reasoning_tokens": 0,
+    "usd_estimated": 0.014737,
+    "usd_billed": 0.014737
+  },
+  "validation": {
+    "valid": true,
+    "errors": 0,
+    "warnings": 0,
+    "codes": [],
+    "issues": []
+  },
+  "total_usd": 0.015368,
+  "finished_at": "2026-11-22T08:12:08+00:00",
+  "duration_s": 33.66
+}

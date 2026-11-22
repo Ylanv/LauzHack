@@ -1,192 +1,219 @@
-# AXA Smart Property — Genève
+<p align="center">
+  <img src="docs/assets/axolotl.png" alt="AXAlotl mascot" width="220">
+</p>
 
-Hackathon AXA B2B · LauzHack 2026 · *Frugal use of Multimodal AI*
+<h1 align="center">AXAlotl</h1>
 
-**But :** à partir d'un formulaire de 4 champs, produire automatiquement le dossier de pré-souscription d'une **PME genevoise qui occupe son propre bâtiment d'activité** (atelier, usine, entrepôt, menuiserie…) : 19 features de risque, chacune sourcée, avec les images du bâtiment.
+<p align="center"><b>AI-powered property risk assessment that automates underwriting reports for Swiss insurers.</b></p>
 
-**Principe :** *API first, LLM last.* Tout ce qui est disponible dans les registres et géodonnées officiels (Zefix, RegBL, mensuration, SITG Genève, OFEV, MétéoSuisse) est lu en Python → 0 token. Le modèle vision (Gemini via OpenRouter) n'intervient que sur les **images** (orthophoto du bâtiment, photos du site web) ≈ CHF 0.001 par bâtiment.
-
----
-
-## Démarrage
-
-```bash
-python -m venv .venv && .venv/Scripts/pip install -r requirements.txt uvicorn
-cp .env.example .env        # mettre LLM_API_KEY (OpenRouter) dans .env — jamais dans .env.example
-
-# Partie 1 : tout jusqu'au JSON donné au LLM final
-python scripts/build_llm_input.py "Marie Dupont" "CMDS SA" "Rue du Champ-Blanchod 7, 1228 Plan-les-Ouates" --industry metalworking
-python -m src.validate probe_out/cmds-sa/llm_input.json            # → OK
-
-uvicorn src.main:app --reload    # POST /api/llm-input[?for_llm=true] · GET /api/industries · GET /api/health
-```
-
-`build_llm_input.py` écrit dans `probe_out/<entreprise>/` : `llm_input.json` (photos incluses en base64), `llm_input.for_llm.json` (sans les photos) + les photos en `.jpg`. Option `--no-vision` = 0 token.
+<p align="center">
+  <a href="https://lauz-hack-webapp.vercel.app">Web app</a> ·
+  <a href="https://lauz-hack-webapp.vercel.app/dashboard.html">Underwriter dashboard</a> ·
+  <a href="https://lauz-hack.vercel.app">API</a>
+  <br><sub>LauzHack 2026 · AXA B2B challenge: <i>frugal use of multimodal AI</i></sub>
+</p>
 
 ---
 
-## Entrées (formulaire)
+## The problem and our solution
 
-| Champ | Contrôle |
-|---|---|
-| `client_name` | — |
-| `company_legal_name` | **Nom exact** au registre du commerce (AG = SA = Ltd, GmbH = Sàrl acceptés). Introuvable → erreur 422 |
-| `address` | Adresse du bâtiment `Rue N, NPA Localité`. N° introuvable → 422 (jamais de rapport sur le voisin) |
-| `industry_type` | Liste déroulante (`GET /api/industries`) : menuiserie, métallurgie, traitement de surface, boulangerie, viande/laiterie, imprimerie, garage, plastiques/chimie, entrepôt, précision, textile, autre |
+Small and medium-sized enterprises (SMEs) want to insure the commercial buildings they operate from: workshops, production sites, warehouses. To quote a **premium** and decide on the cover, the insurer has to assess the **risk** of that specific building. That means a long list of risk factors, from the building's construction and condition (COPE: *Construction, Occupancy, Protection, Exposure*) to the industrial activity inside it and its exposure to natural hazards.
 
-**Hors périmètre → 422** : bâtiment hors canton de Genève ; logement ou immeuble mixte (selon le cadastre SITG, qui fait foi à Genève — le RegBL classe parfois un atelier en « maison individuelle »).
-**Service public indisponible → 503** (réessayer).
+Today an underwriter collects these factors by hand from registers, maps, aerial imagery and the company's website. It takes hours per building and is costly.
 
----
+**AXAlotl automates most of this research.** From three inputs (client name, company name, building address), it:
 
-## Pipeline
+1. collects the risk factors from official Swiss and Geneva sources;
+2. reads the images (aerial photo, facade, website photos) with a small vision model;
+3. writes a standardized underwriting report. Every statement in the report is linked to its evidence, and the report says clearly what is **verified**, what is **inferred** and what is still **unknown** (those become questions for the client).
+
+A job that took an underwriter hours now runs **in under a minute for a few cents**. Measured on two real Geneva companies, end to end: **34 s / $0.015** and **47 s / $0.033**.
 
 ```mermaid
-flowchart TD
-    IN["Formulaire<br/>client · raison sociale exacte · adresse GE · type d'industrie"]:::input
-    IN --> CHK{"Entreprise exacte ?<br/>N° de rue ? Genève ?<br/>Bâtiment d'activité ?"}
-    CHK -- Non --> ERR["Erreur 422<br/>(aucun JSON)"]:::stop
-    CHK -- Oui --> A
-
-    subgraph A["Données publiques · 0 token"]
-      Z["Zefix<br/>identité · signaux de faillite"]:::py
-      R["RegBL + mensuration<br/>EGID · emprise exacte"]:::py
-      S["SITG Genève<br/>cadastre · toit 3D · chaudières · autorisations<br/>sites pollués · registre des entreprises"]:::py
-      H["Dangers<br/>séisme · grêle · crue · glissement<br/>ruissellement (profondeur lue dans l'image de la carte)"]:::py
+flowchart LR
+    IN["Client request<br/>name · company · address"]:::input --> ETL
+    subgraph ETL["Data extraction (0 tokens except images)"]
+      REG["Registers & geodata<br/>Zefix · RegBL · SITG · FOEN · MeteoSwiss"]:::py
+      VLM["Vision model<br/>orthophoto · facade · website"]:::llm
     end
-    A --> IMG["Orthophoto SWISSIMAGE<br/>recadrée, contour rouge"]:::py --> VIS["Gemini : toit, stockage extérieur,<br/>points à inspecter"]:::llm
-    A --> SV["Façade Google Street View<br/>(démo)"]:::py --> FAC["Gemini : matériau, état,<br/>stockage le long des murs"]:::llm
-    A --> WEB["Site web (via registre cantonal)<br/>texte + 3 photos"]:::py --> EXT["Gemini : activité, procédés"]:::llm
-    VIS & FAC & EXT --> F["19 features + sources"]:::py --> OUT["llm_input.json + images"]:::output
-    OUT -.-> NEXT["Étape suivante : LLM rapport final"]:::stop
-
+    ETL --> FEAT["19 risk features<br/>+ sources + status"]:::py --> BUNDLE["Evidence bundle<br/>stable IDs, no LLM"]:::py
+    BUNDLE --> LLM["Report model<br/>1 call, strict JSON schema"]:::llm --> VAL{"Validation<br/>schema · IDs · rules"}:::py
+    VAL -- valid --> OUT["output.json<br/>→ dashboard"]:::output
+    VAL -- invalid --> REP["1 bounded repair"]:::llm --> VAL
     classDef input fill:#e8eefc,stroke:#3b5bdb,color:#1b2b6b
     classDef py fill:#e7f3eb,stroke:#2f9e44,color:#165c39
     classDef llm fill:#fdf0d5,stroke:#e67700,color:#805213
-    classDef stop fill:#f1f3f5,stroke:#868e96,color:#495057
     classDef output fill:#f3e8fc,stroke:#7048e8,color:#3b1f7a
 ```
 
 ---
 
-## Les 19 features
+## Data extraction
 
-Format de chaque feature : `{"feature", "value", "status", "requires_verification"}` — sources et notes dans `feature_evidence`.
+The ETL (`src/pipeline.py`) turns the client request into **19 risk features**. Each one carries its value, a **status** and the IDs of the sources it comes from:
 
-| Feature | Prio | Source principale (Genève) | Couverture* |
-|---|---|---|---|
-| `building_usage` | P0 | Cadastre SITG (destination) | 12/12 |
-| `construction_year` | P0 | RegBL / cadastre SITG | 12/12 |
-| `floor_area_m2` | P0 | Indice énergétique SITG (surface chauffée), sinon emprise × niveaux | 12/12 |
-| `number_of_floors` | P0 | RegBL / cadastre SITG | 12/12 |
-| `business_sector` | P0 | Registre cantonal des entreprises (NOGA) + type déclaré | 12/12 |
-| `earthquake_exposure` | P0 | Zone SIA 261 + classe de sol (OFEV) | 12/12 |
-| `flood_exposure` | P0 | Cartes de dangers cantonales | 12/12 |
-| `surface_runoff_exposure` | P0 | Carte OFEV — part du pourtour + **profondeur lue dans les couleurs** | 12/12 |
-| `hail_exposure` | P0 | MétéoSuisse (grêle 50 ans) | 12/12 |
-| `landslide_exposure` | P0 | Cartes de dangers cantonales | 11/12 |
-| `roof_type_material` | P1 | Forme : cadastre 3D (pente) · matériau : vision | 12/12 |
-| `building_renovations` | P1 | Autorisations de construire + année de transformation (sinon « aucune rénovation enregistrée ») | 12/12 |
-| `site_industrial_processes` | P1 | Autorisations, site web, sites pollués, type d'industrie | 12/12 |
-| `high_temperature_operations` | P1 | Autorisations (four, cuisson…), site web, type d'industrie | 10/12 |
-| `gas_installations` | P1 | **Registre des chaudières** + autorisations (« gaz ») + type d'industrie | 9/12 |
-| `flammable_material_storage` | P1 | Chaudière/citerne mazout, autorisations (citerne, stockage), sites pollués | 12/12 |
-| `potential_repair_needs` | P1 | Vision (à inspecter, jamais confirmé) | 6/12 |
-| `construction_material` | P1 | **Façade Google Street View** + vision (garde-fous : photos Google uniquement, façade visible, enseigne ou cohérence des étages) | 8/12 |
-| `reconstruction_value_chf` | P2 | Volume (cadastre) × CHF/m³ selon type — **approximatif** | 12/12 |
-
-\* sur 12 PME industrielles genevoises réelles (ateliers mécaniques, traitement des métaux, alimentaire, garage, logistique). **P0 99 % · P1 88 %**.
-
-`status` : `verified` (registre officiel) · `observed` (vision) · `inferred` (site web / secteur / industrie déclarée) · `declared` (client) · `estimated` (calcul) · `unknown` (non trouvé, `value = null`).
-
-**Retirées** (introuvables dans les données publiques — 20 autorisations mentionnent des sprinklers sur tout le canton) : sprinklers, détection incendie, compartimentage, protection crue, sinistres antérieurs, état des conduites → à demander au client hors pipeline.
-
-**Contrainte légale** : l'exposition aux dangers naturels (crue, ruissellement, grêle, glissement) sert à la souscription et à la prévention, **pas de surcharge de prime individuelle** pour la couverture réglementée.
-
-**Valeur de reconstruction** = ce que l'assureur paie pour reconstruire après un dommage (valeur à neuf, base de la somme d'assurance). Genève : marché privé, valeur à neuf = volume × prix au m³, indexée sur l'indice genevois de la construction (161.8 en 2025, base 1988). Prix au m³ indicatifs (`src/reconstruction.py`), à remplacer par la grille AXA.
-
----
-
-## Sortie — `llm_input.json`
-
-Schéma : `schemas/FEATURE/llm_input.v2.schema.json` · validation : `python -m src.validate <fichier>`.
-
-| Bloc | Contenu |
+| Status | Meaning |
 |---|---|
-| `request` | les 4 entrées |
-| `identification` | UID, statut au registre, signaux de faillite, EGID, canton, NOGA, taille, **`shared_building`** (autres entreprises enregistrées dans le même bâtiment — la valeur de reconstruction porte alors sur tout le bâtiment), `annual_revenue_chf` / `estimated_market_value_chf` / `requested_coverages` / `insurance_premium_estimate_chf` (null = non public / non calculé) |
-| `features` | les 19 features |
-| `feature_evidence` | par feature : `source_ids` + note |
-| `feature_coverage_before_llm` | remplissage P0 / P1 / P2 |
-| `sources` | liste centrale (`src_*`) |
-| `evidence` | données brutes : registres + SITG, sortie de Gemini sur l'orthophoto, extraction du site web |
-| `images` | photos **incluses en base64** : `images[nom] = {label, credit, shows, mime, data_url}` (`orthophoto.jpg`, `facade_streetview.jpg`, `website_N.jpg`) |
-| `metrics` | appels LLM, tokens, coût, durée |
+| `verified` | read from an official register or geodata layer |
+| `observed` | seen by the vision model on an image (to be confirmed) |
+| `inferred` | deduced from the company website, the business sector or the declared industry |
+| `declared` | stated by the client |
+| `estimated` | computed by us from other data (e.g. a value from a volume) |
+| `unknown` | not found in any source. Never guessed: `value = null` |
 
-### Pour l'étape LLM (rapport final)
+We distinguish **extracted** features, read from a source as they are, from **generated** features, which we compute or infer ourselves. A status is never upgraded: an inference never becomes "verified".
 
-- **Exemples prêts à l'emploi** (vraie sortie, CMDS SA) : `examples/llm_input.example.json` (complet ; base64 des photos remplacé par un marqueur) et `examples/llm_input.for_llm.example.json` (ce que le LLM reçoit).
-- **Ne jamais envoyer les photos au LLM** (une photo en base64 = des centaines de milliers de tokens). Envoyer `for_llm_text(doc)` — même JSON sans les `data_url`, ≈ 4 300 tokens — ou appeler `POST /api/llm-input?for_llm=true`.
-- Le LLM voit le catalogue `images[nom] = {label, shows, credit}` et **cite les photos par leur nom** dans le rapport (ex. `"facade_streetview.jpg"`) ; le rendu insère `doc["images"][nom]["data_url"]` (`<img src="...">`).
-- Rappels pour le prompt : `unknown` = non trouvé (jamais deviné) ; dangers naturels = information de souscription/prévention, pas de surcharge de prime ; Street View = démo.
+### Building (construction and condition)
 
-```python
-from src.pipeline import run, for_llm_text
-doc = run("Marie Dupont", "CMDS SA", "Rue du Champ-Blanchod 7, 1228 Plan-les-Ouates", "metalworking")
-prompt_json = for_llm_text(doc)          # → LLM
-photos = doc["images"]                   # → rendu du rapport
-```
+| Feature | Type | How we get it |
+|---|---|---|
+| `building_usage` | extracted | Geneva cadastre (SITG), building destination |
+| `construction_year` | extracted | Federal building register (RegBL), cross-checked with the cadastre's construction period |
+| `number_of_floors` | extracted | RegBL / SITG cadastre |
+| `floor_area_m2` | extracted, else **generated** | heated area from the SITG energy index; fallback: footprint × floors |
+| `roof_type_material` | extracted + **vision** | shape from the 3D cadastre (roof slope); material from the aerial photo |
+| `construction_material` | **vision** | Street View facade photo, with safeguards (facade visible, matching sign or floor count) |
+| `building_renovations` | extracted | building permits + transformation year from the cadastre |
+| `potential_repair_needs` | **vision** | aerial photo: possible damage, always flagged "to inspect", never "confirmed" |
+| `reconstruction_value_chf` | **generated** | building volume (cadastre) × CHF/m³ by building type, indexed on the Geneva construction cost index. Given as a range, explicitly approximate |
+
+### Occupancy and industrial fire risk
+
+| Feature | Type | How we get it |
+|---|---|---|
+| `business_sector` | extracted | cantonal business register (NOGA code), compared with the industry declared by the client |
+| `site_industrial_processes` | extracted + **inferred** | building permits, polluted-sites cadastre, company website (vision/text model), typical processes of the industry |
+| `high_temperature_operations` | extracted + **inferred** | permits (furnaces, kilns…), website, industry |
+| `gas_installations` | extracted + **inferred** | **Geneva boiler register**, permits mentioning gas, industry |
+| `flammable_material_storage` | extracted + **vision** | oil boiler / tank in the registers, permits, polluted sites, outdoor storage seen on the aerial photo |
+
+Fire protection (sprinklers, fire alarm, compartmentation, inspections), loss history and pipe condition are **not available in public data**. They are added as `unknown`, and the report turns them into questions for the client. A missing record is never read as "absent".
+
+### External factors (natural hazards)
+
+| Feature | Type | How we get it |
+|---|---|---|
+| `earthquake_exposure` | extracted | SIA 261 seismic zone + soil class (FOEN) |
+| `flood_exposure` | extracted | cantonal flood hazard maps (SITG) |
+| `surface_runoff_exposure` | extracted | FOEN surface runoff map: share of the building's perimeter exposed, and **water depth read from the map's colour legend** (pixel analysis, no AI) |
+| `hail_exposure` | extracted | MeteoSwiss 50-year hail size |
+| `landslide_exposure` | extracted | cantonal landslide hazard maps |
+
+The pipeline also identifies the company and the building: Zefix UID, register status and bankruptcy signals, EGID (unique building ID), and whether other companies share the building.
+
+### What the vision model does, and why
+
+Some risk factors exist only in images, so we use a **small, cheap vision-language model** (`google/gemini-2.5-flash-lite` via OpenRouter, set by `MODEL_VISION`) for exactly three calls per building:
+
+| Call | Image | What it returns (strict JSON schema) |
+|---|---|---|
+| **Aerial** | SWISSIMAGE orthophoto, cropped to the building, insured footprint drawn in red from the official cadastre (matched by EGID) | roof type and material, solar panels, skylights, roof equipment, outdoor storage, vegetation and neighbours close to the walls, possible roof issues |
+| **Facade** | Google Street View photo (demo source) | is the facade actually visible? wall material, visible floors, condition, storage along the walls, does a sign match the company? |
+| **Website** | company website text + up to 3 photos | activity summary, processes, gas, high-temperature operations, flammable materials, protections mentioned. Each claim is flagged as building-specific or company-wide |
+
+**Why it is built this way (token efficiency):**
+- **Specialized and cheap.** A small vision model answers narrow questions into a strict JSON schema with short fields. It is not asked to write the report.
+- **Images are read once.** Only the structured observations travel downstream. The report model **never receives pixels**: one image costs thousands of tokens; its observations cost a few dozen.
+- **Low output.** Capped outputs (`max_tokens` 700–1,400) and a "never invent, unknown stays unknown" system prompt.
+- **Cached per image,** so re-running a building costs nothing.
+
+**Measured cost: about 2,600–2,800 input and 900–1,000 output tokens for all three calls, ≈ $0.0006–0.0007 per building** (`etl` in `metrics.json` of the [example reports](examples/reports/)). We have not yet benchmarked other vision models on these three tasks.
 
 ---
 
-## Code
+## Report generation
 
+`python -m src.report` (`src/report/`) turns the features into a validated underwriting report:
+
+1. **Evidence bundle, deterministic and with no LLM** (`src/report/evidence.py`). The features become an evidence register with stable IDs: `feat.<feature>` for facts, `src_N` for sources, `vis.*` for images. Missing protections are added as unknown facts, and contradictions between sources are flagged (e.g. register year vs cadastre period).
+2. **One LLM call with a strict output schema** (`schemas/OUTPUT/report_output.v1.schema.json`). The model writes the narrative only: executive summary, COPE assessment, up to 6 priority findings, hazard interpretation, valuation comment, up to 8 questions for the client, and the next step for the underwriter. **Every statement cites evidence IDs.** It never writes numbers, sources or images itself; the dashboard resolves those from the evidence register.
+3. **Validation** (`src/report/validate_report.py`):
+   - the report matches the schema;
+   - every cited ID exists;
+   - no premium is quoted;
+   - no individual pricing of regulated natural hazards;
+   - an unknown protection is never asserted (e.g. "sprinklers installed");
+   - amounts not found in the evidence are flagged;
+   - every unknown feature becomes a question.
+
+   An invalid report gets **one bounded repair**; if it is still invalid, it is never presented as a report.
+4. **Metrics for every report:** tokens (input, output, reasoning, cache), billed or estimated USD, latency, retries and stage status (`metrics.json`).
+
+**How we keep token usage low:**
+- no images sent to the report model;
+- one generation call instead of a chain of calls;
+- values are referenced by ID instead of rewritten;
+- short, capped text fields defined in the schema;
+- the model choice is driven by measured cost and latency.
+
+### Model benchmark
+
+Same 10 evidence bundles (2 real Geneva cases, 8 synthetic) for every model, with the production prompt, schema and validator. Time = wall clock until a valid `output.json`, repairs included.
+
+<p align="center"><img src="docs/assets/report_model_benchmark.png" alt="Speed vs cost per model" width="820"></p>
+
+| Model | Avg time | $/report | Valid (first try) | Quality* | Critical errors* |
+|---|---|---|---|---|---|
+| **Gemini 3.5 Flash-Lite** (default) | **9.2 s** | **$0.012** | 10/10 (10) | 0.864 | 5 / 8 |
+| gpt-oss-120b, low reasoning | 11.1 s | $0.004 | 10/10 (9) | 0.870 | 3 / 8 |
+| Gemini 3.5 Flash, minimal reasoning | 16.8 s | $0.044 | 10/10 (10) | 0.907 | 1 / 8 |
+| Gemini 3.8 Flash, minimal reasoning | 24.9 s | $0.019 | 10/10 (10) | 0.930 | 4 / 8 |
+| Claude Opus 5.5, low effort | 45.4 s | $0.167 | 10/10 (10) | 0.932 | 3 / 8 |
+| Claude Opus 5.5, medium effort | 82.2 s | $0.261 | 10/10 (9) | 0.939 | 3 / 8 |
+
+\* Automatic score against ground truth on the 8 synthetic cases (0–1), by a keyword-based checker. Indicative only, not a ranking. Reasoning effort was the main speed lever: it cut output tokens by up to 3–4×. Excluded after a first screening round: GPT-5.4 mini (provider rejects the schema), Qwen 3.5 Flash (invalid JSON), Mistral Small (slow), DeepSeek V4.1 Flash (always needed a repair).
+
+An independent LLM judge (GPT-6.1 Terra, 15 synthetic validation cases, 1–5 scale) rated factual grounding highest for Opus (3.9) and lowest for Gemini 3.5 Flash (2.2). The default (Flash-Lite) favours speed and cost; the report prompt was later tuned for it. The model is one setting (`REPORT_MODEL`, configs in `models/configs.json`).
+
+### Example output
+
+Two real reports, generated end to end with the default model:
+
+- [`examples/reports/cmds-sa/`](examples/reports/cmds-sa/): CMDS SA, metalworking, Plan-les-Ouates
+- [`examples/reports/jean-gallay-sa/`](examples/reports/jean-gallay-sa/): Jean Gallay SA, Plan-les-Ouates
+
+Each folder contains `output.json` (the report), `features_combined.json` (evidence register), `metrics.json` (tokens, cost, time) and `etl_output.json` (raw extraction). Only the swisstopo orthophoto is committed: Street View and website photos are not stored, because of their terms of use. How a frontend displays these files is described in [`docs/FRONTEND_INTEGRATION.md`](docs/FRONTEND_INTEGRATION.md).
+
+---
+
+## Limitations
+
+- **Geneva only.** We focus on the canton of Geneva for two reasons:
+  - it publishes unusually rich open geodata (SITG: cadastre, 3D roofs, boiler register, building permits, polluted sites, hazard maps);
+  - it is one of the few cantons **without a cantonal monopoly building insurer**. Buildings there are insured on the **private market**, where insurers such as AXA compete. In most other cantons, fire and natural-hazard cover for buildings is provided by a public cantonal insurer.
+
+  The natural-hazard part of building insurance follows a **regulated, uniform tariff** in the private-market cantons, so the pipeline uses hazard exposure for underwriting and prevention, never for an individual surcharge.
+- **Our own feature set.** We do not know the insurers' internal pricing models. We derived the 19 risk features ourselves from what underwriters typically assess and from what public data can provide. The reconstruction value is an indicative range, not an appraisal.
+- **Public data only.** Fire protection, loss history and the true insured value are not public: they always end up as questions for the client.
+- **Demo sources.** Street View is used for the demo under restrictive terms. Production would need licensed imagery or photos supplied by the client.
+- **Evaluation.** Report quality was measured on synthetic cases and a handful of real ones, with automatic checks and an LLM judge. No underwriter has rated the reports yet.
+
+---
+
+## What's next
+
+**Feature extraction**
+- **Align on the insurer's real rating factors.** Knowing exactly which features an insurer's risk model uses would let us build a clear framework for data gathering: which features, from which source, with which precision.
+- **Fallback data sources.** When a primary source is down or has no record, switch automatically to a secondary one, and record which one was used.
+
+**Report generation**
+- **Learn the underwriting team's preferences.** Fine-tune the report model with reinforcement learning from preferences (e.g. GRPO) so it writes the way the team wants. This needs quality preference data: underwriters choosing between report versions and flagging errors. The dashboard, where underwriters already review every report, is the natural place to collect it.
+- **Continuous improvement.** Use the feedback of the team working with the reports to keep improving the model over time.
+
+---
+
+## Run it
+
+```bash
+python -m venv .venv && .venv/bin/pip install -r requirements.txt uvicorn
+cp .env.example .env                      # set LLM_API_KEY (OpenRouter), GOOGLE_MAPS_API_KEY, ACCESS_CODE
+.venv/bin/python -m src.report --input schemas/INPUT/example.customer_request.json --output reports/cmds-sa
+.venv/bin/python -m src.report --metrics reports/cmds-sa     # tokens, cost, time
 ```
-src/pipeline.py          run() → llm_input.json · for_llm_text() · save() · contrôles de périmètre
-src/public_data.py       Zefix, géocodage, RegBL, emprise (mensuration → SITG), dangers, orthophoto
-src/geneva.py            SITG : cadastre, toit 3D, énergie, chaudières, autorisations, sites pollués, établissements
-src/company_profile.py   statut registre + signaux de faillite (API zefix.ch)
-src/building_condition.py âge / état / chauffage (RegBL)
-src/reconstruction.py    valeur de reconstruction (volume × CHF/m³)
-src/industries.py        types d'industrie (formulaire) → procédés typiques
-src/web_scrape.py        site web : texte, phrases à risque, photos
-src/streetview.py        façade Google Street View (démo)
-src/blocks.py            blocs de preuves + appels vision (orthophoto, façade, site web)
-src/features.py          les 19 features + sources
-src/prompts.py           prompts + sous-schémas JSON stricts des appels vision
-src/llm.py               seul point d'entrée LLM : json_schema, retry, cache, tokens, coût
-src/validate.py          validation de llm_input.json
-src/main.py              API FastAPI (Vercel)
-scripts/build_llm_input.py   un llm_input.json
-examples/                    llm_input exemple (complet + version LLM)
-schemas/FEATURE/llm_input.v2.schema.json  contrat de sortie
-```
 
-## Données SITG embarquées
+- **API:** `uvicorn src.main:app --reload` → `POST /api/reports/stream` (live report with streamed progress), `GET /api/cases` (stored reports). The access code is sent in the `X-Access-Code` header.
+- **Web app and dashboard:** `cd webapp && npm install && npx vite` (see [`docs/WEBAPP.md`](docs/WEBAPP.md)).
+- **Deployment:** two Vercel projects deploy on every push to `main`: the backend (`lauz-hack`) and the web app (`lauz-hack-webapp`, root `webapp/`). Online reports are stored in a private Vercel Blob store. See [`docs/DEPLOY_VERCEL.md`](docs/DEPLOY_VERCEL.md).
+- **Data contracts:** [`schemas/README.md`](schemas/README.md) (INPUT → FEATURE → COMBINED_FEATURE → OUTPUT).
 
-Le serveur SITG (`vector.sitg.ge.ch`) **coupe les connexions venant des clouds** (Vercel/AWS) — vérifié depuis Vercel ; geo.admin.ch, geodienste.ch et Zefix répondent normalement. Les couches genevoises des **7 077 bâtiments « Activité »** sont donc embarquées dans `data/sitg_ge_extract.json.gz` (3,1 Mo) : cadastre, pente du toit, indice énergétique, chaudières, autorisations de construire, sites pollués, établissements (jointure spatiale sur l'emprise), registre par UID.
-
-- La pipeline lit l'extrait d'abord (0 appel réseau), puis le SITG en direct pour les bâtiments absents (fonctionne en local, pas sur Vercel).
-- Données figées à la date de génération (indiquée dans `evidence.public_data.geneva.source`). **Régénérer** depuis un poste non bloqué : `python scripts/build_sitg_extract.py` (~3 min).
-- Vérifié : résultats identiques à l'interrogation directe (CMDS, Nutrifrais, CBM, RHODIOR).
-
-## Hébergement
-
-**En ligne : https://axa-smart-property.vercel.app** — page de démo (formulaire → features, photos, JSON pour le LLM). L'API demande le **code d'accès** de l'équipe (header `X-Access-Code`, champ « Code d'accès » de la page) car elle consomme les crédits OpenRouter et Google ; le code est dans la variable Vercel `ACCESS_CODE`.
-
-
-- **Modèles** : OpenRouter (clé AXA). Vision + extraction : `google/gemini-2.5-flash-lite` (≈ CHF 0.0005 par bâtiment).
-- **Vercel** : FastAPI = une fonction Python ; pas d'écriture disque hors `/tmp` ; cache LLM via Upstash Redis si configuré ; 13–60 s par bâtiment (< 300 s).
-
-## Limites connues
-
-- Vision non évaluée : sur un cas, elle a attribué au bâtiment des lanterneaux du voisin. Évaluation possible contre les registres SITG (toit, panneaux solaires, toits verts).
-- Grands bâtiments partagés (plusieurs entreprises) : la valeur de reconstruction porte sur tout le bâtiment.
-- Hauteur du cadastre parfois aberrante (cheminées) → contrôlée ; surface chauffée couvrant plusieurs bâtiments → contrôlée.
-- Signaux de faillite via l'API de zefix.ch (non officielle) → en production : identifiants ZefixPublicREST.
-- **Street View = démo hackathon** : les conditions Google sont restrictives sur l'extraction de données par IA. 1 image par rapport, non stockée, attribution affichée. En production : imagerie sous licence ou photo fournie par le client. Mapillary testé : quasi aucune couverture en zone industrielle.
-- Street View peut viser un bâtiment voisin (rejeté si l'écart d'étages avec le cadastre est ≥ 3 sans enseigne visible).
-
-## Sources
-
-[Zefix](https://www.zefix.ch) · [RegBL](https://www.housing-stat.ch) · [SITG](https://sitg.ge.ch) · [geodienste.ch](https://geodienste.ch) · [geo.admin.ch](https://www.geo.admin.ch) · [SWISSIMAGE](https://www.swisstopo.admin.ch/fr/orthophotos-swissimage-10-cm) · [OpenRouter](https://openrouter.ai)
+**Sources:** [Zefix](https://www.zefix.ch) · [RegBL](https://www.housing-stat.ch) · [SITG](https://sitg.ge.ch) · [geodienste.ch](https://geodienste.ch) · [geo.admin.ch](https://www.geo.admin.ch) · [SWISSIMAGE](https://www.swisstopo.admin.ch/fr/orthophotos-swissimage-10-cm) · [MeteoSwiss](https://www.meteoswiss.admin.ch) · [OpenRouter](https://openrouter.ai)

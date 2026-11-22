@@ -1,0 +1,383 @@
+{
+  "schema_version": "1.0",
+  "case_id": "jean-gallay-sa",
+  "executive_summary": {
+    "headline": "Underwriting Review for Jean Gallay SA Industrial Facility in Plan-les-Ouates",
+    "overview": "Jean Gallay SA operates an industrial workshop (NOGA 281100, 100-199 workers) at Chemin du Pont-du-Centenaire 108, Plan-les-Ouates, built 1971-1980 with an 8,048 m² floor area and an estimated reconstruction value of CHF 47.4M. The building features metal cladding, a flat roof with solar installations, and gas heating. While official hazard maps show no river flood or landslide risk, surface runoff affects 41.5% of the perimeter with depths over 25 cm, and seismic zone is Z1b. Critical fire protection features remain unknown, requiring clarification before underwriting readiness.",
+    "underwriting_readiness": "requires_clarification",
+    "key_takeaway": "The facility represents a high-value industrial risk with complex precision manufacturing processes, but lack of fire protection data requires technical clarification.",
+    "critical_fact_ids": [
+      "feat.reconstruction_value_chf",
+      "feat.building_usage",
+      "feat.construction_year",
+      "feat.floor_area_m2",
+      "feat.surface_runoff_exposure"
+    ]
+  },
+  "cope": {
+    "construction": {
+      "headline": "Two-story industrial building constructed 1971-1980 with metal cladding and flat gravel roof",
+      "interpretation": "The structure is an industrial workshop built between 1971 and 1980 with a footprint of nearly 7,000 m² and a heated floor area of 8,048 m². Visual observations indicate metal cladding on the exterior showing weathering and minor dents, combined with a flat roof featuring extensive photovoltaic panels, skylights, and ventilation units.",
+      "fact_ids": [
+        "feat.construction_material",
+        "feat.construction_year",
+        "feat.floor_area_m2",
+        "feat.number_of_floors",
+        "feat.roof_type_material"
+      ],
+      "evidence_ids": [
+        "src_2",
+        "src_6",
+        "src_7",
+        "src_10"
+      ],
+      "unknown_feature_ids": []
+    },
+    "occupancy": {
+      "headline": "Industrial workshop for precision machinery and turbine components manufacturing",
+      "interpretation": "The building is officially registered for industrial activity (Atelier) under NOGA 281100 for the manufacture of engines and turbines, employing 100 to 199 workers. Company documentation and website claims indicate advanced metal processing operations including machining, forming, welding, heat treatment, and plasma coating.",
+      "fact_ids": [
+        "feat.building_usage",
+        "feat.business_sector",
+        "feat.site_industrial_processes",
+        "feat.high_temperature_operations"
+      ],
+      "evidence_ids": [
+        "src_1",
+        "src_8",
+        "src_10"
+      ],
+      "unknown_feature_ids": []
+    },
+    "protection": {
+      "headline": "Active gas boiler installation present with key fire protection mechanisms currently unknown",
+      "interpretation": "Heating is supplied by an active 650 kW gas boiler installed in 2013, alongside legacy heating oil boilers marked as inactive. Essential active and passive fire protection systems—including sprinklers, fire alarm detection, compartmentation, and formal inspection records—are entirely unrecorded in the current evidence bundle.",
+      "fact_ids": [
+        "feat.gas_installations"
+      ],
+      "evidence_ids": [
+        "src_10"
+      ],
+      "unknown_feature_ids": [
+        "feat.sprinklers",
+        "feat.fire_alarm_detection",
+        "feat.fire_compartmentation",
+        "feat.fire_protection_inspections",
+        "feat.pipe_condition",
+        "feat.electrical_installation_condition"
+      ]
+    },
+    "exposure": {
+      "headline": "Moderate surface runoff exposure and seismic zone Z1b; flood and landslide exposure absent",
+      "interpretation": "Cantonal hazard maps confirm the building is outside river flood and landslide zones, and hail exposure is moderate (3.0 cm for 50-year return). However, surface runoff affects 41.5% of the building perimeter with localized depths exceeding 25 cm, and the site is situated in earthquake zone Z1b on soil class D.",
+      "fact_ids": [
+        "feat.earthquake_exposure",
+        "feat.flood_exposure",
+        "feat.surface_runoff_exposure",
+        "feat.hail_exposure",
+        "feat.landslide_exposure"
+      ],
+      "evidence_ids": [
+        "src_4",
+        "src_5"
+      ],
+      "unknown_feature_ids": []
+    }
+  },
+  "priority_findings": [
+    {
+      "id": "find_fire_protection_gap",
+      "title": "Complete Absence of Recorded Fire Protection and Detection Data",
+      "priority": "critical",
+      "finding_type": "data_gap",
+      "observation": "Key fire protection features including sprinklers, automatic fire alarm detection, and fire compartmentation have no recorded data in the building registers.",
+      "underwriting_implication": "Without verified suppression and detection systems, the potential loss severity for a large industrial workshop conducting thermal and welding processes is unquantifiable.",
+      "recommended_action": "Request a comprehensive fire risk survey or technical questionnaire from the client.",
+      "confidence": "high",
+      "fact_ids": [],
+      "evidence_ids": [],
+      "coverage_components": [
+        "fire"
+      ]
+    },
+    {
+      "id": "find_surface_runoff",
+      "title": "Significant Perimeter Exposure to Surface Runoff",
+      "priority": "high",
+      "finding_type": "confirmed_exposure",
+      "observation": "Official geodata indicates that 41.5% of the building perimeter lies within a surface runoff zone, with maximum water depths exceeding 25 cm.",
+      "underwriting_implication": "Intense precipitation events could lead to water ingress at ground-level industrial areas, potentially damaging machinery and stored components.",
+      "recommended_action": "Verify threshold sealing, local grading, and mobile flood barriers around ground-level entries.",
+      "confidence": "high",
+      "fact_ids": [
+        "feat.surface_runoff_exposure"
+      ],
+      "evidence_ids": [
+        "src_4"
+      ],
+      "coverage_components": [
+        "regulated_natural_hazards",
+        "water_optional"
+      ]
+    },
+    {
+      "id": "find_industrial_processes",
+      "title": "High-Hazard Industrial Operations and Thermal Treatments",
+      "priority": "high",
+      "finding_type": "potential_exposure",
+      "observation": "The company engages in precision machining, welding, heat treatment, and plasma coating under NOGA 281100 with high-temperature operations likely present.",
+      "underwriting_implication": "Thermal operations and welding significantly increase the risk of ignition and fire spread within the industrial workshop environment.",
+      "recommended_action": "Confirm safety protocols for hot work, welding booths, and heat treatment furnaces.",
+      "confidence": "medium",
+      "fact_ids": [
+        "feat.site_industrial_processes",
+        "feat.high_temperature_operations"
+      ],
+      "evidence_ids": [
+        "src_8",
+        "src_10"
+      ],
+      "coverage_components": [
+        "fire"
+      ]
+    },
+    {
+      "id": "find_solar_roof",
+      "title": "Extensive Roof Photovoltaic Array and Rooftop Equipment",
+      "priority": "medium",
+      "finding_type": "protective_factor",
+      "observation": "Aerial imagery and cadastre analysis reveal a flat roof largely covered by solar photovoltaic panels alongside ventilation units and skylights.",
+      "underwriting_implication": "Rooftop PV installations introduce DC electrical fire risks and firefighter access limitations, while also increasing wind and snow load vulnerabilities.",
+      "recommended_action": "Inspect electrical DC isolators, inverter locations, and roof loading calculations.",
+      "confidence": "high",
+      "fact_ids": [
+        "feat.building_renovations",
+        "feat.roof_type_material"
+      ],
+      "evidence_ids": [
+        "src_6",
+        "src_10"
+      ],
+      "coverage_components": [
+        "fire",
+        "regulated_natural_hazards"
+      ]
+    },
+    {
+      "id": "find_polluted_site",
+      "title": "Registered Polluted Site Status on Cantonal Cadastre",
+      "priority": "medium",
+      "finding_type": "confirmed_exposure",
+      "observation": "The location is registered in the cantonal polluted-sites cadastre due to former or current industrial activities involving electronic component fabrication.",
+      "underwriting_implication": "Environmental contamination liabilities could complicate post-loss remediation or civil liability claims.",
+      "recommended_action": "Review environmental compliance reports and soil investigation records if available.",
+      "confidence": "high",
+      "fact_ids": [
+        "feat.flammable_material_storage"
+      ],
+      "evidence_ids": [
+        "src_10"
+      ],
+      "coverage_components": [
+        "other_optional"
+      ]
+    }
+  ],
+  "hazard_interpretations": [
+    {
+      "peril": "fire",
+      "interpretation": "Industrial occupancy with metal cladding, high-temperature operations, and active gas heating, offset by unverified fire protection systems.",
+      "pricing_role": "potential_individual_pricing_input",
+      "fact_ids": [
+        "feat.building_usage",
+        "feat.gas_installations"
+      ],
+      "evidence_ids": [
+        "src_8",
+        "src_10"
+      ],
+      "follow_up_needed": true
+    },
+    {
+      "peril": "river_flood",
+      "interpretation": "Building is located outside all official river flood hazard zones according to cantonal maps.",
+      "pricing_role": "regulated_component_underwriting_only",
+      "fact_ids": [
+        "feat.flood_exposure"
+      ],
+      "evidence_ids": [
+        "src_5"
+      ],
+      "follow_up_needed": false
+    },
+    {
+      "peril": "surface_runoff",
+      "interpretation": "41.5% of the perimeter is affected by surface runoff with depths exceeding 25 cm during intense precipitation.",
+      "pricing_role": "regulated_component_underwriting_only",
+      "fact_ids": [
+        "feat.surface_runoff_exposure"
+      ],
+      "evidence_ids": [
+        "src_4"
+      ],
+      "follow_up_needed": true
+    },
+    {
+      "peril": "earthquake",
+      "interpretation": "Building is located in SIA 261 seismic zone Z1b on soil class D, standard for the Geneva basin region.",
+      "pricing_role": "potential_individual_pricing_input",
+      "fact_ids": [
+        "feat.earthquake_exposure"
+      ],
+      "evidence_ids": [
+        "src_4"
+      ],
+      "follow_up_needed": false
+    },
+    {
+      "peril": "hail",
+      "interpretation": "Moderate hail exposure with a 50-year expected hailstone size of 3.0 cm.",
+      "pricing_role": "regulated_component_underwriting_only",
+      "fact_ids": [
+        "feat.hail_exposure"
+      ],
+      "evidence_ids": [
+        "src_4"
+      ],
+      "follow_up_needed": false
+    },
+    {
+      "peril": "landslide",
+      "interpretation": "Building is outside all official landslide hazard zones on the cantonal hazard map.",
+      "pricing_role": "regulated_component_underwriting_only",
+      "fact_ids": [
+        "feat.landslide_exposure"
+      ],
+      "evidence_ids": [
+        "src_5"
+      ],
+      "follow_up_needed": false
+    },
+    {
+      "peril": "water_escape",
+      "interpretation": "Pipe condition and internal plumbing age are currently unassessed; requires verification given the large industrial footprint and multi-story layout.",
+      "pricing_role": "coverage_dependent",
+      "fact_ids": [],
+      "evidence_ids": [],
+      "follow_up_needed": true
+    }
+  ],
+  "valuation_commentary": {
+    "reconstruction_value_comment": "The estimated reconstruction value is CHF 47.4 million (range CHF 34.5M to CHF 60.3M), derived from an estimated building volume of 86,207 m³ (based on footprint and height) multiplied by standard industrial reconstruction unit costs (CHF 400–700/m³).",
+    "market_value_comment": "Market value is not formally established in official registry records and would require commercial appraisal based on industrial property yields in Plan-les-Ouates.",
+    "missing_valuation_inputs": [
+      "Exact verified building volume from official municipal architectural plans",
+      "Recent contractor valuation or insured sum declaration from the client",
+      "Detailed breakdown of machinery and equipment values versus real estate"
+    ],
+    "fact_ids": [
+      "feat.reconstruction_value_chf",
+      "feat.floor_area_m2"
+    ]
+  },
+  "visual_evidence": [
+    {
+      "visual_id": "vis.orthophoto",
+      "title": "Aerial Orthophoto of Industrial Facility",
+      "caption": "Orthophoto showing the large flat-roofed industrial footprint outlined in red, featuring extensive solar panel arrays and rooftop equipment.",
+      "underwriting_relevance": "Confirms roof geometry, absence of immediate vegetation overhang, presence of PV installations, and close proximity of neighboring buildings.",
+      "annotation_ids": [],
+      "fact_ids": [
+        "feat.roof_type_material",
+        "feat.building_renovations"
+      ]
+    },
+    {
+      "visual_id": "vis.facade_streetview",
+      "title": "Street-Level Facade View",
+      "caption": "Street view showing the metal-clad industrial facade and company signage for Jean Gallay SA.",
+      "underwriting_relevance": "Validates exterior construction material (metal cladding), visible building condition, and outdoor perimeter setup.",
+      "annotation_ids": [],
+      "fact_ids": [
+        "feat.construction_material",
+        "feat.potential_repair_needs"
+      ]
+    }
+  ],
+  "open_questions": [
+    {
+      "id": "q_fire_protection",
+      "priority": "critical",
+      "question": "Are automatic sprinkler systems, fire detection alarms, and fire compartment walls installed in the workshop?",
+      "reason_for_underwriter": "Essential to evaluate potential fire loss severity and determine appropriate underwriting terms for industrial operations.",
+      "expected_answer_or_document": "Fire safety concept document or recent cantonal fire inspection report.",
+      "target": "client",
+      "feature_ids": [
+        "feat.sprinklers",
+        "feat.fire_alarm_detection",
+        "feat.fire_compartmentation"
+      ],
+      "trigger_finding_ids": [
+        "find_fire_protection_gap"
+      ],
+      "blocking_initial_pricing": true
+    },
+    {
+      "id": "q_fire_inspections",
+      "priority": "high",
+      "question": "When was the last official or private fire protection inspection conducted on the premises?",
+      "reason_for_underwriter": "Provides verification of ongoing risk management standards and compliance with local fire safety regulations.",
+      "expected_answer_or_document": "Last fire inspection certificate or remediation log.",
+      "target": "client",
+      "feature_ids": [
+        "feat.fire_protection_inspections"
+      ],
+      "trigger_finding_ids": [
+        "find_fire_protection_gap"
+      ],
+      "blocking_initial_pricing": false
+    },
+    {
+      "id": "q_prior_losses",
+      "priority": "medium",
+      "question": "Has the company experienced any property or business interruption losses at this building over the past 5 years?",
+      "reason_for_underwriter": "Loss history is critical for evaluating risk frequency and historical claim patterns.",
+      "expected_answer_or_document": "Signed loss history statement from the broker or previous insurer.",
+      "target": "client",
+      "feature_ids": [
+        "feat.prior_losses"
+      ],
+      "trigger_finding_ids": [],
+      "blocking_initial_pricing": false
+    },
+    {
+      "id": "q_electrical_condition",
+      "priority": "high",
+      "question": "What is the condition and age of the electrical installations and heavy machinery power feeds, including the rooftop PV integration?",
+      "reason_for_underwriter": "Electrical faults and DC solar installations are primary ignition sources in industrial manufacturing facilities.",
+      "expected_answer_or_document": "Periodic electrical safety inspection certificate (OIBT / NIVS).",
+      "target": "client",
+      "feature_ids": [
+        "feat.electrical_installation_condition"
+      ],
+      "trigger_finding_ids": [
+        "find_solar_roof"
+      ],
+      "blocking_initial_pricing": false
+    },
+    {
+      "id": "q_pipe_condition",
+      "priority": "medium",
+      "question": "What is the age, material, and maintenance status of internal plumbing and industrial drainage pipes?",
+      "reason_for_underwriter": "Assesses water escape risk in multi-story industrial workshop environments.",
+      "expected_answer_or_document": "Plumbing maintenance records or recent inspection summary.",
+      "target": "client",
+      "feature_ids": [
+        "feat.pipe_condition"
+      ],
+      "trigger_finding_ids": [],
+      "blocking_initial_pricing": false
+    }
+  ],
+  "underwriter_next_step": "Hold binding until the client provides clarification on active fire protection systems (sprinklers, detection) and electrical safety certificates. Once fire protection details are received, initial pricing can proceed while taking surface runoff exposure and industrial manufacturing processes into account."
+}

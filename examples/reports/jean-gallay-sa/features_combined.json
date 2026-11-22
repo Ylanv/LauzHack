@@ -1,0 +1,946 @@
+{
+  "schema_version": "1.0",
+  "case": {
+    "case_id": "jean-gallay-sa",
+    "client_name": "Jean Gallay SA",
+    "legal_company_name": "Jean Gallay SA",
+    "building_address": "Chemin du Pont-du-Centenaire 108, 1228 Plan-les-Ouates",
+    "created_at": "2026-11-22"
+  },
+  "building": {
+    "egid": "2041999",
+    "company_uid": "CHE-101.981.968",
+    "canton": "GE",
+    "identity_resolution": "unique"
+  },
+  "coverage_context": {
+    "jurisdiction": "CH-GE",
+    "candidate_components": [
+      "fire",
+      "regulated_natural_hazards",
+      "earthquake_optional",
+      "water_optional"
+    ]
+  },
+  "facts": [
+    {
+      "id": "feat.reconstruction_value_chf",
+      "field_key": "reconstruction_value_chf",
+      "value": {
+        "best_estimate_chf": 47410000.0,
+        "low_chf": 34480000.0,
+        "high_chf": 60340000.0
+      },
+      "unit": "CHF",
+      "evidence_status": "derived_estimate",
+      "site_scope": "building",
+      "source_ids": [
+        "src_9",
+        "src_2",
+        "src_3"
+      ],
+      "valid_as_of": null,
+      "confidence": "medium",
+      "method": "upstream status: estimated; building volume (RegBL gvol or Geneva cadastre footprint x height) = 86,207 m³ × CHF 400–700/m³ (industrial building)"
+    },
+    {
+      "id": "feat.building_usage",
+      "field_key": "building_usage",
+      "value": "Atelier (Activité) — Conception, fabrication et commercialisation de produits industriels, notamment de machines et d'éléments de machines.",
+      "unit": null,
+      "evidence_status": "official_record",
+      "site_scope": "building",
+      "source_ids": [
+        "src_10",
+        "src_8"
+      ],
+      "valid_as_of": null,
+      "confidence": "high",
+      "method": "upstream status: verified"
+    },
+    {
+      "id": "feat.construction_material",
+      "field_key": "construction_material",
+      "value": "metal cladding",
+      "unit": null,
+      "evidence_status": "visual_observation",
+      "site_scope": "building",
+      "source_ids": [
+        "src_7"
+      ],
+      "valid_as_of": null,
+      "confidence": "medium",
+      "method": "upstream status: observed; seen on the street-level facade photo"
+    },
+    {
+      "id": "feat.construction_year",
+      "field_key": "construction_year",
+      "value": "1971–1980",
+      "unit": null,
+      "evidence_status": "official_record",
+      "site_scope": "building",
+      "source_ids": [
+        "src_2"
+      ],
+      "valid_as_of": null,
+      "confidence": "high",
+      "method": "upstream status: verified; construction period (RegBL)"
+    },
+    {
+      "id": "feat.floor_area_m2",
+      "field_key": "floor_area_m2",
+      "value": 8048.0,
+      "unit": "m2",
+      "evidence_status": "official_record",
+      "site_scope": "building",
+      "source_ids": [
+        "src_10"
+      ],
+      "valid_as_of": null,
+      "confidence": "high",
+      "method": "upstream status: verified; heated floor area (SRE) from the Geneva energy index"
+    },
+    {
+      "id": "feat.number_of_floors",
+      "field_key": "number_of_floors",
+      "value": 2,
+      "unit": null,
+      "evidence_status": "official_record",
+      "site_scope": "building",
+      "source_ids": [
+        "src_2"
+      ],
+      "valid_as_of": null,
+      "confidence": "high",
+      "method": "upstream status: verified"
+    },
+    {
+      "id": "feat.roof_type_material",
+      "field_key": "roof_type_material",
+      "value": "flat (3 deg) / gravel/membrane",
+      "unit": null,
+      "evidence_status": "official_record",
+      "site_scope": "building",
+      "source_ids": [
+        "src_10",
+        "src_6"
+      ],
+      "valid_as_of": null,
+      "confidence": "high",
+      "method": "upstream status: verified; type from 3D cadastre slope; material seen on the orthophoto"
+    },
+    {
+      "id": "feat.building_renovations",
+      "field_key": "building_renovations",
+      "value": "solar panels visible on the roof",
+      "unit": null,
+      "evidence_status": "derived_estimate",
+      "site_scope": "building",
+      "source_ids": [
+        "src_10",
+        "src_2",
+        "src_6"
+      ],
+      "valid_as_of": null,
+      "confidence": "low",
+      "method": "INFERRED — not confirmed; upstream status: inferred; estimated condition: renovated (signals)"
+    },
+    {
+      "id": "feat.business_sector",
+      "field_key": "business_sector",
+      "value": "Fabrication de moteurs et turbines à l'exception des moteurs d'avions et de véhicules (NOGA 281100)",
+      "unit": null,
+      "evidence_status": "official_record",
+      "site_scope": "industrial_site",
+      "source_ids": [
+        "src_10"
+      ],
+      "valid_as_of": null,
+      "confidence": "high",
+      "method": "upstream status: verified; size: 100-199 travailleurs"
+    },
+    {
+      "id": "feat.site_industrial_processes",
+      "field_key": "site_industrial_processes",
+      "value": [
+        "Usinage",
+        "Formage",
+        "Soudage",
+        "Traitement thermique",
+        "Revêtement plasma",
+        "historical activity on the site (polluted-sites cadastre): Fabrication de composants électroniques"
+      ],
+      "unit": null,
+      "evidence_status": "derived_estimate",
+      "site_scope": "company",
+      "source_ids": [
+        "src_8"
+      ],
+      "valid_as_of": null,
+      "confidence": "low",
+      "method": "INFERRED — not confirmed; upstream status: inferred"
+    },
+    {
+      "id": "feat.high_temperature_operations",
+      "field_key": "high_temperature_operations",
+      "value": "possible",
+      "unit": null,
+      "evidence_status": "derived_estimate",
+      "site_scope": "company",
+      "source_ids": [
+        "src_8"
+      ],
+      "valid_as_of": null,
+      "confidence": "low",
+      "method": "INFERRED — not confirmed; upstream status: inferred"
+    },
+    {
+      "id": "feat.gas_installations",
+      "field_key": "gas_installations",
+      "value": "active gas boiler(s): 1, 650.0 kW, installed 2013",
+      "unit": null,
+      "evidence_status": "official_record",
+      "site_scope": "building",
+      "source_ids": [
+        "src_10"
+      ],
+      "valid_as_of": null,
+      "confidence": "high",
+      "method": "upstream status: verified; heating: gas (boiler)"
+    },
+    {
+      "id": "feat.flammable_material_storage",
+      "field_key": "flammable_material_storage",
+      "value": "polluted site: Fabrication de composants électroniques; along the facade: some wooden pallets are visible near the building.",
+      "unit": null,
+      "evidence_status": "derived_estimate",
+      "site_scope": "company",
+      "source_ids": [
+        "src_8",
+        "src_6",
+        "src_2"
+      ],
+      "valid_as_of": null,
+      "confidence": "low",
+      "method": "INFERRED — not confirmed; upstream status: inferred"
+    },
+    {
+      "id": "feat.earthquake_exposure",
+      "field_key": "earthquake_exposure",
+      "value": {
+        "sia261_zone": "Z1b",
+        "soil_class": "D"
+      },
+      "unit": null,
+      "evidence_status": "official_record",
+      "site_scope": "building",
+      "source_ids": [
+        "src_4"
+      ],
+      "valid_as_of": null,
+      "confidence": "high",
+      "method": "upstream status: verified"
+    },
+    {
+      "id": "feat.flood_exposure",
+      "field_key": "flood_exposure",
+      "value": {
+        "level": "none",
+        "share": 0
+      },
+      "unit": null,
+      "evidence_status": "official_record",
+      "site_scope": "building",
+      "source_ids": [
+        "src_5"
+      ],
+      "valid_as_of": null,
+      "confidence": "high",
+      "method": "upstream status: verified; mapped area, building outside hazard zones · not usable as an individual premium surcharge (regulated natural-hazards cover)"
+    },
+    {
+      "id": "feat.surface_runoff_exposure",
+      "field_key": "surface_runoff_exposure",
+      "value": {
+        "perimeter_share": 0.415,
+        "max_depth": ">25 cm",
+        "by_depth": {
+          "0-10 cm": 0.174,
+          "10-25 cm": 0.126,
+          ">25 cm": 0.115
+        }
+      },
+      "unit": null,
+      "evidence_status": "official_record",
+      "site_scope": "building",
+      "source_ids": [
+        "src_4"
+      ],
+      "valid_as_of": null,
+      "confidence": "high",
+      "method": "upstream status: verified; share of the perimeter in a runoff zone; depth read from the official map colours (image processing, no LLM) · not usable as an individual premium surcharge (regulated natural-hazards cover)"
+    },
+    {
+      "id": "feat.hail_exposure",
+      "field_key": "hail_exposure",
+      "value": {
+        "hail_50y_cm": 3.0
+      },
+      "unit": null,
+      "evidence_status": "official_record",
+      "site_scope": "building",
+      "source_ids": [
+        "src_4"
+      ],
+      "valid_as_of": null,
+      "confidence": "high",
+      "method": "upstream status: verified; not usable as an individual premium surcharge (regulated natural-hazards cover)"
+    },
+    {
+      "id": "feat.landslide_exposure",
+      "field_key": "landslide_exposure",
+      "value": {
+        "level": "none",
+        "share": 0
+      },
+      "unit": null,
+      "evidence_status": "official_record",
+      "site_scope": "building",
+      "source_ids": [
+        "src_5"
+      ],
+      "valid_as_of": null,
+      "confidence": "high",
+      "method": "upstream status: verified; mapped area, building outside hazard zones · not usable as an individual premium surcharge (regulated natural-hazards cover)"
+    },
+    {
+      "id": "feat.potential_repair_needs",
+      "field_key": "potential_repair_needs",
+      "value": [
+        "facade condition looks fair (street-level photo)"
+      ],
+      "unit": null,
+      "evidence_status": "visual_observation",
+      "site_scope": "building",
+      "source_ids": [
+        "src_6",
+        "src_7"
+      ],
+      "valid_as_of": null,
+      "confidence": "medium",
+      "method": "upstream status: observed; to inspect, not confirmed damage"
+    },
+    {
+      "id": "ev.declared_industry",
+      "field_key": "declared_industry_type",
+      "value": null,
+      "unit": null,
+      "evidence_status": "unknown",
+      "site_scope": "unknown",
+      "source_ids": [],
+      "valid_as_of": null,
+      "confidence": "low",
+      "method": null
+    },
+    {
+      "id": "ev.company_register",
+      "field_key": "company_register_record",
+      "value": {
+        "uid": "CHE-101.981.968",
+        "legal_form_code": "0106",
+        "purpose": "conception, fabrication et commercialisation de produits industriels, notamment de machines, d'éléments de machines et d'ensembles de machines (systèmes); étude, fabrication et vente de pièces mécano-",
+        "register_status": "EXISTIEREND",
+        "registered_since": null,
+        "noga_code": "281100",
+        "branch": "Fabrication de moteurs et turbines à l'exception des moteurs d'avions et de véhicules",
+        "size_class": "100-199 travailleurs",
+        "establishment_address": "Chemin du Pont-du-Centenaire 108"
+      },
+      "unit": null,
+      "evidence_status": "official_record",
+      "site_scope": "company",
+      "source_ids": [
+        "src_1",
+        "src_10"
+      ],
+      "valid_as_of": null,
+      "confidence": "high",
+      "method": "commercial register + cantonal establishment register"
+    },
+    {
+      "id": "ev.building_records",
+      "field_key": "building_register_and_cadastre",
+      "value": {
+        "egid": "2041999",
+        "class_code": 1251,
+        "register_construction_year": null,
+        "register_floors": 2,
+        "footprint_m2": 6985.6,
+        "register_floor_area_m2": null,
+        "volume_m3": null,
+        "altitude_m": 401.0,
+        "condition_estimate": {
+          "state": "renovated (signals)",
+          "status": "estimated",
+          "construction": {
+            "from": 1971,
+            "to": 1980,
+            "basis": "construction period (RegBL)"
+          },
+          "age_years": {
+            "min": 46,
+            "max": 55
+          },
+          "renovation_signals": [
+            "solar panels visible on the roof"
+          ],
+          "last_renovation_year": null
+        },
+        "cadastre": {
+          "destination": "Atelier",
+          "nomen_classe": "Activité",
+          "epoque_construction": "Période de 1971 à 1980",
+          "annee_construction": null,
+          "niveaux_horsol": null,
+          "niveaux_ssol": null,
+          "hauteur": 12.34,
+          "surface": 6986,
+          "annee_transformation": null,
+          "mixed_use": false
+        },
+        "roof_3d": {
+          "slope_mean_deg": 3.09,
+          "type": "flat"
+        },
+        "energy_index": {
+          "heated_area_m2": 8048.0,
+          "idc_mj_m2": 90.0,
+          "idc_year": 2025,
+          "idc_status": "IDC à jour"
+        }
+      },
+      "unit": null,
+      "evidence_status": "official_record",
+      "site_scope": "building",
+      "source_ids": [
+        "src_1",
+        "src_10"
+      ],
+      "valid_as_of": null,
+      "confidence": "high",
+      "method": "building register + cantonal cadastre"
+    },
+    {
+      "id": "ev.heating_register",
+      "field_key": "heating_and_boiler_register",
+      "value": {
+        "heating": {
+          "energy_source": "gas",
+          "generator": "boiler",
+          "info_updated": "24.04.2025",
+          "fire_relevant": true,
+          "presence_status": "confirmed_present"
+        },
+        "boilers": [
+          {
+            "fuel": "HEL",
+            "active": false,
+            "year": 1985,
+            "power_kw": 523.0,
+            "use": "Chauffage-eau chaude"
+          },
+          {
+            "fuel": "HEL",
+            "active": false,
+            "year": 1985,
+            "power_kw": 523.0,
+            "use": "Chauffage-eau chaude"
+          },
+          {
+            "fuel": "HEL",
+            "active": false,
+            "year": null,
+            "power_kw": 523.0,
+            "use": "Chauffage-eau chaude"
+          },
+          {
+            "fuel": "HEL",
+            "active": false,
+            "year": 1986,
+            "power_kw": 581.0,
+            "use": "Chauffage-eau chaude"
+          },
+          {
+            "fuel": "HEL",
+            "active": false,
+            "year": null,
+            "power_kw": 523.0,
+            "use": "Chauffage-eau chaude"
+          },
+          {
+            "fuel": "HEL",
+            "active": false,
+            "year": 1979,
+            "power_kw": 581.0,
+            "use": "Chauffage-eau chaude"
+          },
+          {
+            "fuel": "Gaz",
+            "active": true,
+            "year": 2013,
+            "power_kw": 650.0,
+            "use": "Chauffage-eau chaude"
+          }
+        ]
+      },
+      "unit": null,
+      "evidence_status": "official_record",
+      "site_scope": "building",
+      "source_ids": [
+        "src_1",
+        "src_10"
+      ],
+      "valid_as_of": null,
+      "confidence": "medium",
+      "method": "registers may be outdated (check info_updated / permits)"
+    },
+    {
+      "id": "ev.building_permits",
+      "field_key": "building_permits",
+      "value": [],
+      "unit": null,
+      "evidence_status": "official_record",
+      "site_scope": "building",
+      "source_ids": [
+        "src_10"
+      ],
+      "valid_as_of": null,
+      "confidence": "high",
+      "method": "building-permit register, permits whose point falls in the footprint"
+    },
+    {
+      "id": "ev.polluted_sites",
+      "field_key": "polluted_sites_cadastre",
+      "value": [
+        {
+          "activity": "Fabrication de composants électroniques",
+          "site_type": "Aire d'exploitation",
+          "pollutants": null,
+          "company": "JEAN GALLAY SA"
+        }
+      ],
+      "unit": null,
+      "evidence_status": "official_record",
+      "site_scope": "building",
+      "source_ids": [
+        "src_10"
+      ],
+      "valid_as_of": null,
+      "confidence": "high",
+      "method": "polluted-sites cadastre: activity of the listed company (may be a former occupant)"
+    },
+    {
+      "id": "ev.website_extraction",
+      "field_key": "company_website_claims",
+      "value": {
+        "activity_summary": "Conception, fabrication et commercialisation de produits industriels, notamment de machines et d'éléments de machines.",
+        "processes": [
+          "Usinage",
+          "Formage",
+          "Soudage",
+          "Traitement thermique",
+          "Revêtement plasma"
+        ],
+        "gas_installations": "unknown",
+        "high_temperature_processes": "possible",
+        "flammable_materials": "unknown",
+        "flammable_materials_detail": null,
+        "protections_mentioned": [
+          "ISO 14001"
+        ],
+        "evidence": [
+          {
+            "claim": "Usinage, formage, soudage et traitement thermique de précision",
+            "quote_or_photo": "Usinage, formage, soudage et traitement thermique de précision",
+            "building_specific": false
+          },
+          {
+            "claim": "Spécialiste de l'usinage, de la mise en forme, du soudage, des revêtements plasma et du traitement thermique",
+            "quote_or_photo": "Spécialiste de l'usinage, de la mise en forme, du soudage, des revêtements plasma et du traitement thermique",
+            "building_specific": false
+          },
+          {
+            "claim": "Plus de 30 procédés de fabrication et de contrôle sous un même toit",
+            "quote_or_photo": "Plus de 30 procédés de fabrication et de contrôle sous un même toit",
+            "building_specific": true
+          },
+          {
+            "claim": "Nos certifications",
+            "quote_or_photo": "ISO 9001 EN 9100 ISO 14001 EN ISO 3834-2 Nadcap",
+            "building_specific": true
+          },
+          {
+            "claim": "Des équipes de production, contrôle et ingénierie basées à Plan-les-Ouates",
+            "quote_or_photo": "Des équipes de production, contrôle et ingénierie basées à Plan-les-Ouates",
+            "building_specific": true
+          },
+          {
+            "claim": "Pièces de précision pour moteurs civils, militaires, hélicoptères et turbines à gaz",
+            "quote_or_photo": "Pièces de précision pour moteurs civils, militaires, hélicoptères et turbines à gaz",
+            "building_specific": false
+          }
+        ]
+      },
+      "unit": null,
+      "evidence_status": "company_level_document",
+      "site_scope": "company",
+      "source_ids": [
+        "src_8"
+      ],
+      "valid_as_of": null,
+      "confidence": "medium",
+      "method": "website text extraction; claims with building_specific=false are company-wide, not proof for this building"
+    },
+    {
+      "id": "ev.aerial_vision",
+      "field_key": "orthophoto_vision_observations",
+      "value": {
+        "image_quality": "good",
+        "roof_type": "flat",
+        "roof_material": "gravel/membrane",
+        "construction_material_hint": "concrete",
+        "pv_panels": "confirmed_present",
+        "skylights": "confirmed_present",
+        "roof_equipment": [
+          "ventilation units",
+          "skylights"
+        ],
+        "outdoor_storage": "confirmed_absent",
+        "outdoor_storage_detail": null,
+        "vegetation_close_to_walls": "confirmed_absent",
+        "neighbouring_buildings_close": "confirmed_present",
+        "possible_roof_issues": [],
+        "observations": [
+          "Extensive solar panel array covers most of the roof.",
+          "Multiple skylights are visible on the roof.",
+          "Ventilation units are present on the roof.",
+          "The building has a flat roof.",
+          "Neighbouring buildings are very close to this building."
+        ]
+      },
+      "unit": null,
+      "evidence_status": "visual_observation",
+      "site_scope": "building",
+      "source_ids": [
+        "src_6"
+      ],
+      "valid_as_of": null,
+      "confidence": "medium",
+      "method": "vision model on the orthophoto: candidates to verify"
+    },
+    {
+      "id": "ev.facade_vision",
+      "field_key": "street_photo_vision_observations",
+      "value": {
+        "camera": {
+          "date": "2024-05",
+          "distance_m": 54,
+          "heading_deg": 143
+        },
+        "facade_visible": true,
+        "construction_material": "metal_cladding",
+        "construction_material_detail": null,
+        "floors_visible": 1,
+        "visible_condition": "fair",
+        "outdoor_storage": "possible",
+        "outdoor_storage_detail": "some wooden pallets are visible near the building.",
+        "signage_matches_company": "no",
+        "observations": [
+          "The building appears to be a warehouse or industrial facility.",
+          "There is a sign visible on the building that reads 'Jean Gallay SA'.",
+          "The metal cladding shows some signs of weathering and minor dents.",
+          "The windows appear to be tinted or reflective."
+        ]
+      },
+      "unit": null,
+      "evidence_status": "visual_observation",
+      "site_scope": "building",
+      "source_ids": [
+        "src_7"
+      ],
+      "valid_as_of": null,
+      "confidence": "medium",
+      "method": "vision model on a street-level photo"
+    },
+    {
+      "id": "ev.cantonal_hazard_map_note",
+      "field_key": "cantonal_hazard_map_status",
+      "value": "mapped area, footprint outside every hazard zone (no known hazard)",
+      "unit": null,
+      "evidence_status": "official_record",
+      "site_scope": "building",
+      "source_ids": [
+        "src_5"
+      ],
+      "valid_as_of": null,
+      "confidence": "high",
+      "method": "status of the cantonal flood/landslide map"
+    },
+    {
+      "id": "feat.sprinklers",
+      "field_key": "sprinklers",
+      "value": null,
+      "unit": null,
+      "evidence_status": "unknown",
+      "site_scope": "unknown",
+      "source_ids": [],
+      "valid_as_of": null,
+      "confidence": "low",
+      "method": null
+    },
+    {
+      "id": "feat.fire_alarm_detection",
+      "field_key": "fire_alarm_detection",
+      "value": null,
+      "unit": null,
+      "evidence_status": "unknown",
+      "site_scope": "unknown",
+      "source_ids": [],
+      "valid_as_of": null,
+      "confidence": "low",
+      "method": null
+    },
+    {
+      "id": "feat.fire_compartmentation",
+      "field_key": "fire_compartmentation",
+      "value": null,
+      "unit": null,
+      "evidence_status": "unknown",
+      "site_scope": "unknown",
+      "source_ids": [],
+      "valid_as_of": null,
+      "confidence": "low",
+      "method": null
+    },
+    {
+      "id": "feat.fire_protection_inspections",
+      "field_key": "fire_protection_inspections",
+      "value": null,
+      "unit": null,
+      "evidence_status": "unknown",
+      "site_scope": "unknown",
+      "source_ids": [],
+      "valid_as_of": null,
+      "confidence": "low",
+      "method": null
+    },
+    {
+      "id": "feat.prior_losses",
+      "field_key": "prior_losses",
+      "value": null,
+      "unit": null,
+      "evidence_status": "unknown",
+      "site_scope": "unknown",
+      "source_ids": [],
+      "valid_as_of": null,
+      "confidence": "low",
+      "method": null
+    },
+    {
+      "id": "feat.pipe_condition",
+      "field_key": "pipe_condition",
+      "value": null,
+      "unit": null,
+      "evidence_status": "unknown",
+      "site_scope": "unknown",
+      "source_ids": [],
+      "valid_as_of": null,
+      "confidence": "low",
+      "method": null
+    },
+    {
+      "id": "feat.electrical_installation_condition",
+      "field_key": "electrical_installation_condition",
+      "value": null,
+      "unit": null,
+      "evidence_status": "unknown",
+      "site_scope": "unknown",
+      "source_ids": [],
+      "valid_as_of": null,
+      "confidence": "low",
+      "method": null
+    }
+  ],
+  "visuals": [
+    {
+      "id": "vis.orthophoto",
+      "kind": "aerial_orthophoto",
+      "asset_uri": "images/orthophoto.jpg",
+      "source_ids": [
+        "src_6"
+      ],
+      "captured_or_published_at": null,
+      "annotation_ids": [],
+      "annotations": [],
+      "alt_text": "Orthophoto SWISSIMAGE (building outlined in red). Vision summary: Extensive solar panel array covers most of the roof.; Multiple skylights are visible on the roof.; Ventilation units are present on the roof.; The building has a flat roof.; Neighbouring buildings are very close to this building.",
+      "building_egid": "2041999"
+    },
+    {
+      "id": "vis.facade_streetview",
+      "kind": "company_photo",
+      "asset_uri": "images/facade_streetview.jpg",
+      "source_ids": [
+        "src_7"
+      ],
+      "captured_or_published_at": "2024-05",
+      "annotation_ids": [],
+      "annotations": [],
+      "alt_text": "Street-level facade photo (Google Street View, demo). Vision summary: The building appears to be a warehouse or industrial facility.; There is a sign visible on the building that reads 'Jean Gallay SA'.; The metal cladding shows some signs of weathering and minor dents.; The windows appear to be tinted or reflective.",
+      "building_egid": "2041999"
+    },
+    {
+      "id": "vis.website_1",
+      "kind": "company_photo",
+      "asset_uri": "images/website_1.jpg",
+      "source_ids": [
+        "src_7"
+      ],
+      "captured_or_published_at": "2024-05",
+      "annotation_ids": [],
+      "annotations": [],
+      "alt_text": "Turbine aéronautique en vol dans les nuages. Vision summary: Photo of turbine components.",
+      "building_egid": "2041999"
+    },
+    {
+      "id": "vis.website_2",
+      "kind": "company_photo",
+      "asset_uri": "images/website_2.jpg",
+      "source_ids": [
+        "src_7"
+      ],
+      "captured_or_published_at": "2024-05",
+      "annotation_ids": [],
+      "annotations": [],
+      "alt_text": "Avion de ligne en vol, vue de face. Vision summary: Photo of a commercial airplane.",
+      "building_egid": "2041999"
+    },
+    {
+      "id": "vis.website_3",
+      "kind": "company_photo",
+      "asset_uri": "images/website_3.jpg",
+      "source_ids": [
+        "src_7"
+      ],
+      "captured_or_published_at": "2024-05",
+      "annotation_ids": [],
+      "annotations": [],
+      "alt_text": "Avion de chasse militaire en vol. Vision summary: Photo of a fighter jet.",
+      "building_egid": "2041999"
+    }
+  ],
+  "sources": [
+    {
+      "id": "src_1",
+      "provider": "Zefix commercial register (Linked Data + zefix.ch)",
+      "title": "official registry record",
+      "url": "https://www.zefix.ch",
+      "publication_date": null,
+      "retrieved_at": "2026-11-22",
+      "usage_or_attribution": null
+    },
+    {
+      "id": "src_2",
+      "provider": "Federal Register of Buildings (RegBL)",
+      "title": "official registry record",
+      "url": "https://www.housing-stat.ch",
+      "publication_date": null,
+      "retrieved_at": "2026-11-22",
+      "usage_or_attribution": null
+    },
+    {
+      "id": "src_3",
+      "provider": "Official cadastral survey (geodienste.ch)",
+      "title": "official geodata record",
+      "url": "https://geodienste.ch/services/av",
+      "publication_date": null,
+      "retrieved_at": "2026-11-22",
+      "usage_or_attribution": null
+    },
+    {
+      "id": "src_4",
+      "provider": "geo.admin.ch (FOEN / MeteoSwiss / SIA 261)",
+      "title": "official geodata record",
+      "url": "https://wms.geo.admin.ch",
+      "publication_date": null,
+      "retrieved_at": "2026-11-22",
+      "usage_or_attribution": null
+    },
+    {
+      "id": "src_5",
+      "provider": "Cantonal hazard maps (geodienste.ch)",
+      "title": "official geodata record",
+      "url": "https://geodienste.ch/services/gefahrenkarten",
+      "publication_date": null,
+      "retrieved_at": "2026-11-22",
+      "usage_or_attribution": null
+    },
+    {
+      "id": "src_6",
+      "provider": "SWISSIMAGE © swisstopo + vision model",
+      "title": "aerial image record",
+      "url": null,
+      "publication_date": null,
+      "retrieved_at": "2026-11-22",
+      "usage_or_attribution": "© swisstopo (SWISSIMAGE)"
+    },
+    {
+      "id": "src_7",
+      "provider": "Google Street View (demo) + vision model",
+      "title": "street image record",
+      "url": null,
+      "publication_date": null,
+      "retrieved_at": "2026-11-22",
+      "usage_or_attribution": "© Google Street View (demo)"
+    },
+    {
+      "id": "src_8",
+      "provider": "Company website",
+      "title": "company website record",
+      "url": "https://www.jean-gallay.ch/",
+      "publication_date": null,
+      "retrieved_at": "2026-11-22",
+      "usage_or_attribution": null
+    },
+    {
+      "id": "src_9",
+      "provider": "Indicative cost model (volume × CHF/m³)",
+      "title": "derived calculation record",
+      "url": null,
+      "publication_date": null,
+      "retrieved_at": "2026-11-22",
+      "usage_or_attribution": null
+    },
+    {
+      "id": "src_10",
+      "provider": "SITG Geneva (cadastre, energy, boilers, building permits, establishments)",
+      "title": "official registry record",
+      "url": "https://sitg.ge.ch",
+      "publication_date": null,
+      "retrieved_at": "2026-11-22",
+      "usage_or_attribution": null
+    }
+  ],
+  "unknown_feature_ids": [
+    "feat.sprinklers",
+    "feat.fire_alarm_detection",
+    "feat.fire_compartmentation",
+    "feat.fire_protection_inspections",
+    "feat.prior_losses",
+    "feat.pipe_condition",
+    "feat.electrical_installation_condition"
+  ],
+  "quality_flags": [
+    "natural-hazard exposures are for underwriting/prevention only — not an individual premium surcharge (regulated cover)",
+    "valid_as_of unknown for most sources (retrieval snapshot)"
+  ]
+}
