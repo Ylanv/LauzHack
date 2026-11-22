@@ -221,11 +221,16 @@ export const MapFlight = (() => {
   const FE = { list: [] as Feat[], tries: 0, last: -9, done: false }
   /** Official footprint of the insured building (GET /api/footprint, WGS84 GeoJSON), same polygon as the red outline in the report. */
   let official: any = null
+  /** the official footprint stands in for the tile guess of the building; water and forest keep coming from the tiles */
+  const withOfficial = (list: Feat[]): Feat[] => (official ? [officialFeat(official), ...list.filter((f) => f.kind !== "building")] : list)
   const officialFeat = (geom: any): Feat => {
     const ring: number[][] = (geom.type === "MultiPolygon" ? geom.coordinates[0][0] : geom.coordinates[0]) || []
     const xs = ring.map((p) => p[0]), ys = ring.map((p) => p[1])
     return { kind: "building", d: 0, name: "", geom, at: [(Math.min(...xs) + Math.max(...xs)) / 2, (Math.min(...ys) + Math.max(...ys)) / 2], t0: -1 }
   }
+  /** zones framed on the map: building white, water blue and forest green (ZC); road and neighbour are not drawn */
+  const SHOWN: Feat["kind"][] = ["building", "water", "forest"]
+  const HL: Partial<Record<Feat["kind"], string>> = { building: "#ffffff" }
   const KIND = { building: { col: "#3d52a0", tag: "Building", title: "Your building" }, neighbour: { col: "#3d52a0", tag: "Fire spread", title: "Neighbouring building" }, road: { col: "#7091e6", tag: "Access", title: "Main road" }, water: { col: "#7091e6", tag: "Flood exposure", title: "Water" }, forest: { col: "#8697c4", tag: "Wildfire, storm", title: "Wooded area" } } as const
   const distLabel = (d: number) => (d < 3 ? "adjoining" : d < 100 ? Math.round(d / 5) * 5 + " m" : Math.round(d / 10) * 10 + " m")
 
@@ -261,11 +266,11 @@ export const MapFlight = (() => {
     // lines (road, river) become a corridor of their real width with framed edges, not a thin stroke
     const ppm = mpx()
     vis.forEach(({ f, a }) => {
-      const col = ZC[f.kind], isPoly = f.geom.type.includes("Polygon")
+      const col = HL[f.kind] ?? ZC[f.kind], isPoly = f.geom.type.includes("Polygon")
       ctx.save(); ctx.globalAlpha = a; ctx.lineJoin = "round"; ctx.lineCap = "round"
       if (isPoly) {
         ctx.beginPath(); tracePath(f.geom)
-        ctx.fillStyle = f.kind === "building" ? "rgba(255,255,255,.16)" : col + "38"; ctx.fill()
+        ctx.fillStyle = col === "#ffffff" ? "rgba(255,255,255,.16)" : col + "38"; ctx.fill()
         const hp = hatch(col); if (hp) { ctx.fillStyle = hp; ctx.globalAlpha = a * 0.85; ctx.fill(); ctx.globalAlpha = a }
         ctx.strokeStyle = "rgba(10,14,46,.6)"; ctx.lineWidth = 6; ctx.stroke(); ctx.strokeStyle = col; ctx.lineWidth = 3; ctx.stroke()
       } else corridor(f.geom, Math.max(12, (f.kind === "road" ? 12 : 18) * ppm), col, a)
@@ -480,8 +485,8 @@ export const MapFlight = (() => {
     if (SHOW_FEATURES && !FE.done && cam.zoom > 15.8 && performance.now() - FE.last > 700) {
       FE.last = performance.now(); FE.tries++
       // the official footprint (cadastre, matched by EGID) wins over the vector-tile guess (point-in-polygon, can pick a neighbour)
-      const r = official ? { out: [] as Feat[], hasOwn: true } : analyseSurroundings(S.coords, (layer, filter) => map!.querySourceFeatures("vt", { sourceLayer: layer, filter: filter as any }) as any[])
-      if (map.isSourceLoaded("vt") && (r.hasOwn || FE.tries >= 8)) { FE.done = true; FE.list = official ? [officialFeat(official)] : r.out.filter((feature) => feature.kind === "building"); FE.list.forEach((f, i) => { f.t0 = isStatic ? 0 : t + 0.4 + i * 1.1 }); fitAerial() }
+      const r = analyseSurroundings(S.coords, (layer, filter) => map!.querySourceFeatures("vt", { sourceLayer: layer, filter: filter as any }) as any[])
+      if (map.isSourceLoaded("vt") && (r.hasOwn || official || FE.tries >= 8)) { FE.done = true; FE.list = withOfficial(r.out.filter((feature) => SHOWN.includes(feature.kind))); FE.list.forEach((f, i) => { f.t0 = isStatic ? 0 : t + 0.4 + i * 1.1 }); fitAerial() }
     }
     // overlay
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, W, H)
@@ -516,7 +521,7 @@ export const MapFlight = (() => {
     setFootprint(geom: any) {
       if (!geom?.type?.includes("Polygon")) return
       official = geom
-      if (FE.done) { const t0 = FE.list[0]?.t0 ?? 0; FE.list = [{ ...officialFeat(geom), t0 }]; fitAerial() }
+      if (FE.done) { const t0 = FE.list.find((f) => f.kind === "building")?.t0 ?? 0; FE.list = withOfficial(FE.list).map((f) => (f.kind === "building" ? { ...f, t0 } : f)); fitAerial() }
     },
     setVariant(v: "A" | "B") { variant = v; loadAerial() },
     get variant() { return variant },
