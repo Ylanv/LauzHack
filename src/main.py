@@ -24,7 +24,7 @@ from uuid import uuid4
 # Make `src.*` imports work whatever the working directory (local or Vercel).
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from fastapi import FastAPI, Header, HTTPException, Query, Request, Response  # noqa: E402
+from fastapi import FastAPI, HTTPException, Query, Response  # noqa: E402
 from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse  # noqa: E402
 from pydantic import BaseModel, Field  # noqa: E402
 
@@ -59,7 +59,6 @@ def health() -> dict:
         "llm_configured": bool(config.LLM_API_KEY),
         "models": {role: m or None for role, m in config.MODELS.items()},
         "streetview_configured": bool(config.GOOGLE_MAPS_API_KEY),
-        "access_code_required": True,
         "cache": "upstash" if config.UPSTASH_REDIS_REST_URL else "file",
     }
 
@@ -67,7 +66,7 @@ def health() -> dict:
 @app.get("/api/footprint")
 def footprint_for_map(address: str = Query(..., min_length=5, max_length=200)) -> dict:
     """Official footprint (WGS84 GeoJSON) of the building at this address, for the map animation. Public data only,
-    no LLM and no credits, so no access code. 404 when the building cannot be pinned down (the map keeps its fallback)."""
+    no LLM and no credits. 404 when the building cannot be pinned down (the map keeps its fallback)."""
     from src.footprint_api import building_footprint
     fp = building_footprint(address.strip())
     if not fp:
@@ -80,18 +79,8 @@ def industries() -> list[dict]:
     return [{"key": k, "label": v[0]} for k, v in INDUSTRIES.items()]
 
 
-def require_access_code(value: str | None) -> None:
-    if not config.ACCESS_CODE:
-        raise HTTPException(503, "The assessment service needs an access code configured.")
-    if value != config.ACCESS_CODE:
-        raise HTTPException(401, "Invalid or missing access code (X-Access-Code header).")
-
-
 @app.post("/api/llm-input")
-def create_llm_input(req: LlmInputRequest, for_llm: bool = False,
-                     x_access_code: str | None = Header(None)) -> dict:
-    # The API spends OpenRouter + Google credits: on a public URL, require the team's access code.
-    require_access_code(x_access_code)
+def create_llm_input(req: LlmInputRequest, for_llm: bool = False) -> dict:
     from src.pipeline import InputError, ServiceError, for_llm_text, run
     try:
         doc = run(req.client_name, req.company_legal_name, req.address, req.industry_type, req.website)
@@ -143,10 +132,9 @@ def _new_job(req: "LlmInputRequest") -> tuple[str, Path, threading.Thread]:
 
 
 @app.post("/api/reports", status_code=202)
-def start_report(req: LlmInputRequest, x_access_code: str | None = Header(None)) -> dict:
+def start_report(req: LlmInputRequest) -> dict:
     """Background job + polling (GET /api/reports/{id}). Long-running servers only: on Vercel the thread is suspended
     once this response is sent — use POST /api/reports/stream there."""
-    require_access_code(x_access_code)
     job_id, _, thread = _new_job(req)
     thread.start()
     return {"job_id": job_id}
@@ -156,12 +144,11 @@ STREAM_MAX_S = 280  # under Vercel's 300 s function limit (Hobby, Fluid compute)
 
 
 @app.post("/api/reports/stream")
-def stream_report(req: LlmInputRequest, x_access_code: str | None = Header(None)) -> StreamingResponse:
+def stream_report(req: LlmInputRequest) -> StreamingResponse:
     """Runs the report pipeline while the request stays open and streams its progress as NDJSON: one line per change,
     same shape as GET /api/reports/{id} ({job_id, status, stage, done_stages, error}), plus {"heartbeat": true}
     lines every 10 s. The last line has a final status (succeeded | invalid_report | failed). Works on Vercel because the
     function stays alive as long as the response is streaming."""
-    require_access_code(x_access_code)
     job_id, out, thread = _new_job(req)
     thread.start()
 
@@ -238,7 +225,6 @@ CASE_FILES = {"output.json", "features_combined.json", "metrics.json", "validati
 _TYPES = {".json": "application/json", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png"}
 _CASES_CACHE: dict = {"t": 0.0, "ids": []}
 _FILE_CACHE: dict[str, bytes] = {}
-CODE_COOKIE = "axa_access"
 
 
 def _store_job(job_id: str, out: Path, only_images: bool = False) -> None:
@@ -259,18 +245,9 @@ def _store_job(job_id: str, out: Path, only_images: bool = False) -> None:
         _CASES_CACHE["t"] = 0.0
 
 
-def _case_access(x_access_code: str | None, request: Request) -> None:
-    require_access_code(x_access_code or request.cookies.get(CODE_COOKIE))
-
-
 @app.get("/api/cases")
-def list_cases(request: Request, response: Response, x_access_code: str | None = Header(None)) -> list[str]:
-    """Report folders available to the underwriter dashboard (newest first). Header X-Access-Code or the cookie set
-    here (so that <img> requests for case photos are authorised too)."""
-    _case_access(x_access_code, request)
-    if x_access_code:
-        response.set_cookie(CODE_COOKIE, x_access_code, httponly=True, secure=config.ON_VERCEL, samesite="strict",
-                            max_age=30 * 24 * 3600, path="/api/cases")
+def list_cases() -> list[str]:
+    """Report folders available to the underwriter dashboard (newest first)."""
     if _time.monotonic() - _CASES_CACHE["t"] > 60:
         if BLOB:
             from vercel.blob import sync as blob
@@ -283,9 +260,8 @@ def list_cases(request: Request, response: Response, x_access_code: str | None =
 
 
 @app.get("/api/cases/{case_id}/files/{path:path}")
-def case_file(case_id: str, path: str, request: Request, x_access_code: str | None = Header(None)) -> Response:
+def case_file(case_id: str, path: str) -> Response:
     """One file of a case (output.json, features_combined.json, metrics.json, validation.json, images/…)."""
-    _case_access(x_access_code, request)
     if not _re.fullmatch(r"[a-z0-9-]{3,80}", case_id) or not (path in CASE_FILES or _re.fullmatch(r"images/[\w.-]+", path)):
         raise HTTPException(404)
     key = f"reports/{case_id}/{path}"

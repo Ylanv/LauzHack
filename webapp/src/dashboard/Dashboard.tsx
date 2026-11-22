@@ -4,7 +4,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import {
-  buildIndex, resolve, humanise, fmtInline, fmtHazard, fmtRange, fmtShare, isRange, isSynthetic, loadFromApi, setAccessCode, type LoadProblem,
+  buildIndex, resolve, humanise, fmtInline, fmtHazard, fmtRange, fmtShare, isRange, isSynthetic, loadFromApi, type LoadProblem,
   READINESS, STATUS, PRICING, TARGET, PRIORITY_ORDER, FINDING_TYPE, type CaseData, type Index,
 } from "./data"
 import DeskCompanion, { type DeskLine } from "./DeskCompanion"
@@ -41,7 +41,7 @@ export default function Dashboard() {
     return loadFromApi().then((r) => {
       if ("cases" in r) { setCases(r.cases); setProblem(null); return }
       setProblem({ kind: r.problem, detail: r.detail })
-      if (r.problem === "network" || r.problem === "server") retry.current = window.setTimeout(load, 5000)
+      retry.current = window.setTimeout(load, 5000)
     })
   }, [])
   useEffect(() => {
@@ -104,10 +104,8 @@ export default function Dashboard() {
         ))}</nav>
       </aside>
       <main className="jr-main">
-        {cases && problem && (problem.kind === "network" || problem.kind === "server") && <p className="jr-notice">Connection problem: showing the last loaded list, retrying…</p>}
-        {problem && (problem.kind === "code" || problem.kind === "wrong_code")
-          ? <AccessForm wrong={problem.kind === "wrong_code"} onSubmit={(code) => { setAccessCode(code); setProblem(null); load() }} />
-          : !cases ? (problem
+        {cases && problem && <p className="jr-notice">Connection problem: showing the last loaded list, retrying…</p>}
+        {!cases ? (problem
             ? <p className="jr-notice">Could not load the reports ({problem.kind === "network" ? "the report service is not reachable" : problem.detail || "server error"}). Retrying…</p>
             : <p className="jr-muted">Loading…</p>)
           : !cases.length && !current ? <p className="jr-empty">No report yet. Reports appear here as soon as a request submitted from the client app is finished.</p>
@@ -116,22 +114,6 @@ export default function Dashboard() {
       </main>
       <DeskCompanion line={line} />
     </div>
-  )
-}
-
-/* ---------------- access code (online only: GET /api/cases is behind the team's access code) ---------------- */
-function AccessForm({ wrong, onSubmit }: { wrong: boolean; onSubmit: (code: string) => void }) {
-  const [code, setCode] = useState("")
-  return (
-    <form className="jr-access" onSubmit={(e) => { e.preventDefault(); if (code.trim()) onSubmit(code) }}>
-      <h2>Access code</h2>
-      <p className="jr-muted">The reports are protected. Enter the underwriting team's access code; it is kept in this browser.</p>
-      {wrong && <p className="jr-notice" role="alert">This access code is not valid. Please check it and try again.</p>}
-      <div className="jr-access-row">
-        <input type="password" autoComplete="off" autoFocus aria-label="Access code" value={code} onChange={(e) => setCode(e.target.value)} />
-        <button type="submit" disabled={!code.trim()}>Open the reports</button>
-      </div>
-    </form>
   )
 }
 

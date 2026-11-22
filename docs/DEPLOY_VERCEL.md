@@ -16,7 +16,7 @@ Une application **FastAPI** (Python 3.13) dans `src/main.py` (objet `app`), dét
 | `GET /` | page de démo (formulaire + JSON de sortie) |
 | `GET /api/health` | vérifie la configuration (clés présentes, modèles) |
 | `GET /api/industries` | valeurs de la liste « type d'industrie » |
-| `POST /api/llm-input` | **la pipeline** : renvoie `llm_input.json` (header `X-Access-Code` obligatoire) |
+| `POST /api/llm-input` | **la pipeline** : renvoie `llm_input.json` |
 | `POST /api/llm-input?for_llm=true` | même JSON sans les photos (version envoyée au LLM) |
 
 Une analyse dure **15 à 60 s** (limite Vercel : 300 s). L'application n'écrit rien (le cache LLM va dans `/tmp`, volatil).
@@ -57,7 +57,6 @@ Relier ensuite le dépôt : *Settings* → *Git* → *Connect Git Repository* �
 | `MODEL_VISION` | `google/gemini-2.5-flash-lite` |
 | `MODEL_EXTRACTION` | `google/gemini-2.5-flash-lite` |
 | `GOOGLE_MAPS_API_KEY` | clé Google Street View (**secret**) |
-| `ACCESS_CODE` | code d'accès choisi par Ylan (**secret**, ≥ 12 caractères). Il protège les crédits : sans lui, n'importe qui peut lancer des analyses payantes |
 | `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN` | optionnel (cache LLM partagé entre instances) |
 
 Ne pas définir `VERCEL`, `ON_VERCEL` ni d'autres variables : Vercel les fournit.
@@ -69,14 +68,10 @@ Remplacer `<URL>` par l'URL du projet.
 ```bash
 # 1. configuration (aucune valeur secrète n'est renvoyée)
 curl -s <URL>/api/health
-#   attendu : "llm_configured": true, "streetview_configured": true, "access_code_required": true
+#   attendu : "llm_configured": true, "streetview_configured": true
 
-# 2. sécurité : sans code → 401
-curl -s -o /dev/null -w "%{http_code}\n" -X POST <URL>/api/llm-input -H "Content-Type: application/json" \
-  -d '{"client_name":"x","company_legal_name":"CMDS SA","address":"Rue du Champ-Blanchod 7, 1228 Plan-les-Ouates","industry_type":"metalworking"}'
-
-# 3. analyse réelle (remplacer <CODE> par l'ACCESS_CODE ; ~20 s)
-curl -s -X POST "<URL>/api/llm-input?for_llm=true" -H "Content-Type: application/json" -H "X-Access-Code: <CODE>" \
+# 2. analyse réelle (~20 s ; pas de code d'accès : l'API est publique, chaque analyse consomme des crédits)
+curl -s -X POST "<URL>/api/llm-input?for_llm=true" -H "Content-Type: application/json" \
   -d '{"client_name":"Marie Dupont","company_legal_name":"CMDS SA","address":"Rue du Champ-Blanchod 7, 1228 Plan-les-Ouates","industry_type":"metalworking"}'
 ```
 
@@ -95,7 +90,6 @@ Test d'un push par un autre membre : après un commit d'un autre auteur sur `mai
 
 | Symptôme | Cause probable | Solution |
 |---|---|---|
-| `401` sur `/api/llm-input` | `X-Access-Code` absent ou différent de `ACCESS_CODE` | Vérifier la variable et le header |
 | `facade.status = error`, `note` contient `REQUEST_DENIED ... Billing` | Facturation non activée sur le projet Google Cloud | Activer la facturation et l'API Street View Static |
 | `website`/`facade` en `error` avec `429` | Limite de débit du fournisseur LLM (appels en parallèle) | Les appels sont relancés 2 fois automatiquement ; réessayer. Si ça persiste, attendre une minute |
 | `422` « No company registered under the exact name » | Nom de société inexact | Utiliser la raison sociale exacte du registre du commerce (ex. `CMDS SA`) |

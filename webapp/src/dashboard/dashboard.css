@@ -196,10 +196,5 @@ body{background:var(--canvas)}
 .jr-main{padding-bottom:200px}
 .jr-brand .brand-logo{width:28px;height:28px;border-radius:6px;image-rendering:pixelated;flex:none;display:block}
 
-/* access code + load problems (online dashboard) */
+/* load problems (online dashboard) */
 .jr-notice{background:#fff7e6;border:1px solid #f0c36d;color:#6b4a00;border-radius:4px;padding:8px 12px;margin:0 0 12px}
-.jr-access{max-width:420px;margin:40px 0}.jr-access h2{margin:0 0 6px}
-.jr-access-row{display:flex;gap:8px;margin-top:12px}
-.jr-access-row input{flex:1;padding:8px 10px;border:1px solid var(--line,#ccc);border-radius:4px}
-.jr-access-row button{padding:8px 14px;border:0;border-radius:4px;background:var(--brand,#00008f);color:#fff;cursor:pointer}
-.jr-access-row button:disabled{opacity:.5;cursor:default}

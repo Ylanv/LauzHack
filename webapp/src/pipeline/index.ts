@@ -1,7 +1,7 @@
 import type { RequestInput } from "./types"
 import { DEMO_INDUSTRIES } from "./mock"
 
-/** Explicit demo flow (/demo.html, ?demo, or ?autorun without &live): fully simulated, no backend call, no access code,
+/** Explicit demo flow (/demo.html, ?demo, or ?autorun without &live): fully simulated, no backend call,
  *  no API key. Every other submission is live. */
 export const DEMO = typeof location !== "undefined" && (/\/demo(\.html)?$/.test(location.pathname) || /[?&]demo\b/.test(location.search) || (/[?&]autorun\b/.test(location.search) && !/[?&]live\b/.test(location.search)))
 
@@ -15,15 +15,7 @@ export async function getIndustries(): Promise<Industry[]> {
   return r.json()
 }
 
-/** Whether the backend asks for the team's access code (GET /api/health). The code itself is never in the bundle. */
-export async function accessCodeRequired(): Promise<boolean> {
-  if (DEMO) return false
-  const r = await fetch("/api/health")
-  if (!r.ok) throw new Error("health " + r.status)
-  return !!(await r.json()).access_code_required
-}
-
-/** Official footprint (WGS84 GeoJSON) of the building at this address, for the map (GET /api/footprint, public data, no code).
+/** Official footprint (WGS84 GeoJSON) of the building at this address, for the map (GET /api/footprint, public data).
  *  null when unavailable: the map then keeps its vector-tile fallback. */
 export async function getFootprint(address: string): Promise<any | null> {
   if (DEMO) return null
@@ -33,25 +25,24 @@ export async function getFootprint(address: string): Promise<any | null> {
   } catch { return null }
 }
 
-export type AssessErrorKind = "code" | "input" | "service"
+export type AssessErrorKind = "input" | "service"
 export class AssessError extends Error { constructor(public kind: AssessErrorKind, message: string) { super(message) } }
 
 /** One live report per submission: POST /api/reports starts the full pipeline (ETL → LLM report → validation) on the
  *  backend and returns a job id. The client never receives the report: underwriters read it in the dashboard.
  *  Never retried automatically. */
-export async function startReport(i: RequestInput, accessCode?: string): Promise<string> {
+export async function startReport(i: RequestInput): Promise<string> {
   let r: Response
   try {
     r = await fetch("/api/reports", {
       method: "POST",
-      headers: { "Content-Type": "application/json", ...(accessCode ? { "X-Access-Code": accessCode } : {}) },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ client_name: i.contact, company_legal_name: i.company, address: i.address, industry_type: i.industry }),
     })
   } catch { throw new AssessError("service", "We could not reach the assessment service. Your details are kept, please try again.") }
   if (r.ok) return (await r.json()).job_id
   let detail = ""
   try { const j = await r.json(); detail = typeof j.detail === "string" ? j.detail : Array.isArray(j.detail) ? j.detail.map((d: { msg?: string }) => d.msg).filter(Boolean).join("; ") : "" } catch { /* no body */ }
-  if (r.status === 401) throw new AssessError("code", "The access code is missing or not valid.")
   if (r.status === 422) throw new AssessError("input", detail || "Some details could not be matched. Please check them.")
   throw new AssessError("service", "The assessment service had a problem. Your details are kept, please try again.")
 }
@@ -59,19 +50,18 @@ export async function startReport(i: RequestInput, accessCode?: string): Promise
 /** One live report per submission, with live progress: POST /api/reports/stream runs the full pipeline while the
  *  request stays open (needed on Vercel, where a background job would be suspended) and streams one JSON line per
  *  progress change (same shape as GET /api/reports/{id}). Resolves with the last status. Never retried automatically. */
-export async function streamReport(i: RequestInput, accessCode: string | undefined, onProgress: (p: ReportProgress) => void): Promise<ReportProgress> {
+export async function streamReport(i: RequestInput, onProgress: (p: ReportProgress) => void): Promise<ReportProgress> {
   let r: Response
   try {
     r = await fetch("/api/reports/stream", {
       method: "POST",
-      headers: { "Content-Type": "application/json", ...(accessCode ? { "X-Access-Code": accessCode } : {}) },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ client_name: i.contact, company_legal_name: i.company, address: i.address, industry_type: i.industry }),
     })
   } catch { throw new AssessError("service", "We could not reach the assessment service. Your details are kept, please try again.") }
   if (!r.ok || !r.body) {
     let detail = ""
     try { const j = await r.json(); detail = typeof j.detail === "string" ? j.detail : Array.isArray(j.detail) ? j.detail.map((d: { msg?: string }) => d.msg).filter(Boolean).join("; ") : "" } catch { /* no body */ }
-    if (r.status === 401) throw new AssessError("code", "The access code is missing or not valid.")
     if (r.status === 422) throw new AssessError("input", detail || "Some details could not be matched. Please check them.")
     throw new AssessError("service", "The assessment service had a problem. Your details are kept, please try again.")
   }

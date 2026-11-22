@@ -13,25 +13,16 @@ export interface CaseData {
 }
 
 
-const CODE_KEY = "axalotl_access_code"
-const storedCode = () => { try { return localStorage.getItem(CODE_KEY) || "" } catch { return "" } }
-/** Saves the team's access code in this browser (entered in the dashboard's own form, never a browser prompt). */
-export function setAccessCode(code: string) { try { localStorage.setItem(CODE_KEY, code.trim()) } catch { /* private mode */ } }
-
-/** Why no case list could be loaded — the dashboard shows each one instead of an empty queue */
-export type LoadProblem = "code" | "wrong_code" | "network" | "server"
+/** Why no case list could be loaded — the dashboard shows it instead of an empty queue */
+export type LoadProblem = "network" | "server"
 export type LoadResult = { cases: CaseData[] } | { problem: LoadProblem; detail?: string }
 
-/** dev → Vite plugin; online (Vercel) → reports stored by the backend (GET /api/cases, private Blob store), behind the
- *  team's access code (header; the backend also sets a cookie so that case photos load in <img>). */
+/** dev → Vite plugin; online (Vercel) → reports stored by the backend (GET /api/cases, private Blob store) */
 async function caseIds(): Promise<{ ids: string[]; base: "dev" | "api" } | { problem: LoadProblem; detail?: string }> {
   try { const r = await fetch("/reports-api/cases", { cache: "no-store" }); if (r.ok) return { ids: await r.json(), base: "dev" } } catch { /* not the dev server */ }
-  const code = storedCode()
-  if (!code) return { problem: "code" }
   let r: Response
-  try { r = await fetch("/api/cases", { cache: "no-store", headers: { "X-Access-Code": code } }) } catch { return { problem: "network" } }
+  try { r = await fetch("/api/cases", { cache: "no-store" }) } catch { return { problem: "network" } }
   if (r.ok) { try { return { ids: await r.json(), base: "api" } } catch { return { problem: "server", detail: "unreadable answer" } } }
-  if (r.status === 401) { try { localStorage.removeItem(CODE_KEY) } catch { /* ignore */ } return { problem: "wrong_code" } }
   let detail = `HTTP ${r.status}`
   try { const j = await r.json(); if (typeof j.detail === "string") detail = j.detail } catch { /* no body */ }
   return { problem: "server", detail }
@@ -45,8 +36,7 @@ export async function loadFromApi(): Promise<LoadResult> {
   if ("problem" in found) return found
   const prefix = found.base === "dev" ? "/reports-api/files" : "/api/cases"
   const mid = found.base === "dev" ? "" : "/files"
-  const headers: Record<string, string> = found.base === "api" ? { "X-Access-Code": storedCode() } : {}
-  const getCase = async (u: string) => { try { const r = await fetch(u, found.base === "dev" ? { cache: "no-store" } : { headers }); return r.ok ? await r.json() : null } catch { return null } }
+  const getCase = async (u: string) => { try { const r = await fetch(u, found.base === "dev" ? { cache: "no-store" } : {}); return r.ok ? await r.json() : null } catch { return null } }
   const cases = await Promise.all(found.ids.map(async (id) => {
     const cached = loaded.get(id)
     if (cached) return cached
