@@ -38,3 +38,16 @@ export function coordsFor(hit: AddressHit): Coords {
   const cn = cantonAt(hit.lon, hit.lat)
   return { lon: hit.lon, lat: hit.lat, cantonId: cn ? cn.id : 0, label: cn ? `${cn.name} (${cn.abbr})` : "Switzerland" }
 }
+
+/** Exact canton from swisstopo's boundaries (swissBOUNDARIES3D). The outlines embedded for coordsFor() are coarse (Geneva: 44 points),
+ *  so an address next to the border (Thônex, Chancy...) can fall outside them. Falls back to the given coordinates when offline. */
+export async function exactCanton(c: Coords): Promise<Coords> {
+  const c0 = new AbortController(), timeout = setTimeout(() => c0.abort(), 4000)
+  try {
+    const d = 0.01, r = await fetch("https://api3.geo.admin.ch/rest/services/api/MapServer/identify?geometryType=esriGeometryPoint&sr=4326&tolerance=0&returnGeometry=false" +
+      `&layers=all:ch.swisstopo.swissboundaries3d-kanton-flaeche.fill&geometry=${c.lon},${c.lat}&imageDisplay=100,100,96&mapExtent=${c.lon - d},${c.lat - d},${c.lon + d},${c.lat + d}`, { signal: c0.signal })
+    if (!r.ok) return c
+    const hit = (await r.json()).results?.[0]
+    return hit?.id ? { ...c, cantonId: Number(hit.id), label: `${hit.attributes?.name ?? "Switzerland"} (${hit.attributes?.ak ?? "?"})` } : c
+  } catch { return c } finally { clearTimeout(timeout) }
+}

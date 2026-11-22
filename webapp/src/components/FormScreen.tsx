@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react"
-import { norm, searchAddress, coordsFor, type AddressHit } from "../lib/address"
+import { norm, searchAddress, coordsFor, exactCanton, type AddressHit } from "../lib/address"
 import { MOCK } from "../pipeline/mock"
 import { DEMO, getIndustries, accessCodeRequired, type Industry, type AssessErrorKind } from "../pipeline"
 import type { Coords, RequestInput } from "../pipeline/types"
@@ -63,8 +63,14 @@ export default function FormScreen({ onSubmit, say, initial, serverError }: Prop
     const x = items[i]; if (!x) return
     set("address", x.text); setOpen(false)
     coords.current = coordsFor(x); picked.current = x.text
-    if (outOfScope(coords.current)) { setErr((p) => ({ ...p, address: `This building is in ${coords.current!.label}. We can only assess buildings in the canton of Geneva for now.` })); say("That one is outside Geneva.", "puzzled") }
-    else say("Found it. We will fly there.", "happy")
+    const verdict = () => {
+      if (outOfScope(coords.current)) { setErr((p) => ({ ...p, address: `This building is in ${coords.current!.label}. We can only assess buildings in the canton of Geneva for now.` })); say("That one is outside Geneva.", "puzzled") }
+      else say("Found it. We will fly there.", "happy")
+    }
+    // the embedded outlines are coarse: before refusing, ask swisstopo for the exact canton (border addresses such as Thônex)
+    if (!outOfScope(coords.current) || DEMO) return verdict()
+    const text = x.text
+    exactCanton(coords.current!).then((c) => { if (picked.current !== text) return; coords.current = c; verdict() })
   }
   const onKey = (e: React.KeyboardEvent) => {
     const n = items.length

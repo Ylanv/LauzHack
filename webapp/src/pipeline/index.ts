@@ -23,6 +23,16 @@ export async function accessCodeRequired(): Promise<boolean> {
   return !!(await r.json()).access_code_required
 }
 
+/** Official footprint (WGS84 GeoJSON) of the building at this address, for the map (GET /api/footprint, public data, no code).
+ *  null when unavailable: the map then keeps its vector-tile fallback. */
+export async function getFootprint(address: string): Promise<any | null> {
+  if (DEMO) return null
+  try {
+    const r = await fetch("/api/footprint?address=" + encodeURIComponent(address))
+    return r.ok ? (await r.json()).geometry ?? null : null
+  } catch { return null }
+}
+
 export type AssessErrorKind = "code" | "input" | "service"
 export class AssessError extends Error { constructor(public kind: AssessErrorKind, message: string) { super(message) } }
 
