@@ -223,7 +223,7 @@ def _progress(job_id: str, out: Path) -> dict:
 BLOB = bool(_os.environ.get("BLOB_STORE_ID") or _os.environ.get("BLOB_READ_WRITE_TOKEN"))
 CASE_FILES = {"output.json", "features_combined.json", "metrics.json", "validation.json", "output.invalid.json"}
 _TYPES = {".json": "application/json", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png"}
-_CASES_CACHE: dict = {"t": 0.0, "ids": []}
+_CASES_CACHE: dict = {"t": None, "ids": []}   # t = time.monotonic() of the last listing; None = never listed
 _FILE_CACHE: dict[str, bytes] = {}
 
 
@@ -242,13 +242,15 @@ def _store_job(job_id: str, out: Path, only_images: bool = False) -> None:
             except Exception:  # noqa: BLE001
                 logging.getLogger(__name__).exception("Blob upload failed for %s/%s", job_id, rel)
     if not only_images:
-        _CASES_CACHE["t"] = 0.0
+        _CASES_CACHE["t"] = None
 
 
 @app.get("/api/cases")
 def list_cases() -> list[str]:
     """Report folders available to the underwriter dashboard (newest first)."""
-    if _time.monotonic() - _CASES_CACHE["t"] > 60:
+    # monotonic() counts from the machine's boot: on a fresh Vercel instance it is only a few seconds, so a 0.0
+    # sentinel would skip the first listing and return [] for the instance's first minute — use None instead.
+    if _CASES_CACHE["t"] is None or _time.monotonic() - _CASES_CACHE["t"] > 60:
         if BLOB:
             from vercel.blob import sync as blob
             ids = [e.prefix.rstrip("/").split("/")[-1] for e in blob.query_blob_entries(prefix="reports/")
