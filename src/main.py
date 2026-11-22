@@ -24,7 +24,7 @@ from uuid import uuid4
 # Make `src.*` imports work whatever the working directory (local or Vercel).
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from fastapi import FastAPI, Header, HTTPException, Request, Response  # noqa: E402
+from fastapi import FastAPI, Header, HTTPException, Query, Request, Response  # noqa: E402
 from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse  # noqa: E402
 from pydantic import BaseModel, Field  # noqa: E402
 
@@ -62,6 +62,17 @@ def health() -> dict:
         "access_code_required": True,
         "cache": "upstash" if config.UPSTASH_REDIS_REST_URL else "file",
     }
+
+
+@app.get("/api/footprint")
+def footprint_for_map(address: str = Query(..., min_length=5, max_length=200)) -> dict:
+    """Official footprint (WGS84 GeoJSON) of the building at this address, for the map animation. Public data only,
+    no LLM and no credits, so no access code. 404 when the building cannot be pinned down (the map keeps its fallback)."""
+    from src.footprint_api import building_footprint
+    fp = building_footprint(address.strip())
+    if not fp:
+        raise HTTPException(404, "No official footprint for this address.")
+    return fp
 
 
 @app.get("/api/industries")

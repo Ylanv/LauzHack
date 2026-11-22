@@ -8,7 +8,7 @@ import { MapFlight } from "./lib/mapFlight"
 import { paintBackground, paintFish } from "./lib/background"
 import { clamp, reducedMotion } from "./lib/utils"
 import { MOCK, INSIGHTS } from "./pipeline/mock"
-import { DEMO, getIndustries, streamReport, progressError, AssessError, type ReportProgress } from "./pipeline"
+import { DEMO, getIndustries, getFootprint, streamReport, progressError, AssessError, type ReportProgress } from "./pipeline"
 import type { Coords, FlightInput, RequestInput, StepId } from "./pipeline/types"
 
 const STAGE_LABEL: Record<string, string> = {
@@ -91,6 +91,8 @@ export default function App() {
     // and only completes once the report has been generated and stored for the team (demo flow: simulated)
     if (!DEMO) {
       const fail = (e: unknown) => { if (run.current === r) { r.live = "error"; r.err = e instanceof AssessError ? e : new AssessError("service", "The assessment service had a problem. Your details are kept, please try again.") } }
+      // official footprint for the map frame (a few seconds, public data): framed by EGID, never a neighbouring building
+      getFootprint(i.address).then((g) => { if (g && run.current === r) MapFlight.setFootprint(g) })
       let photos = false
       const onProgress = (p: ReportProgress) => {
         if (run.current !== r) return
