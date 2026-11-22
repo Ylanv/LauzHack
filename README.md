@@ -102,9 +102,9 @@ Some risk factors exist only in images, so we use a **small, cheap vision-langua
 
 **Measured cost: about 2,600–2,800 input and 900–1,000 output tokens for all three calls, ≈ $0.0006–0.0007 per building** (`etl` in `metrics.json` of the [example reports](examples/reports/)).
 
-### Vision model benchmark (Together AI)
+### Vision model benchmark
 
-Which small vision model should do this job? We compared 9 serverless vision models on **Together AI** on the two image tasks of the pipeline, aerial photo and street facade. All used the same production prompt and JSON schema (`src/prompts.py`).
+Which small vision model should do this job? We compared 9 serverless vision models on the two image tasks of the pipeline, aerial photo and street facade. All used the same production prompt and JSON schema (`src/prompts.py`).
 
 **Example 1: aerial photo → extracted features** (CMDS SA, Plan-les-Ouates, model GLM-5.3-Flash)
 
