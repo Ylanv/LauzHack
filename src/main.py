@@ -24,7 +24,7 @@ from uuid import uuid4
 # Make `src.*` imports work whatever the working directory (local or Vercel).
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from fastapi import FastAPI, Header, HTTPException  # noqa: E402
+from fastapi import FastAPI, Header, HTTPException, Request, Response  # noqa: E402
 from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse  # noqa: E402
 from pydantic import BaseModel, Field  # noqa: E402
 
@@ -120,6 +120,7 @@ def _new_job(req: "LlmInputRequest") -> tuple[str, Path, threading.Thread]:
     def run_job() -> None:
         try:
             report_pipeline.run(doc, out)
+            _store_job(job_id, out)
         except Exception:
             logging.getLogger(__name__).exception("Report job %s failed", job_id)
             (out / "metrics.json").write_text(
@@ -205,6 +206,84 @@ def _progress(job_id: str, out: Path) -> dict:
     err = m.get("error") or {}
     return {"job_id": job_id, "status": m.get("status", "running"), "stage": stage, "done_stages": done,
             "error": {"stage": err.get("stage"), "message": err.get("message")} if err else None}
+
+# ---------------------------------------------------------------- report storage (underwriter dashboard)
+# Vercel Blob (private store) when BLOB_STORE_ID / BLOB_READ_WRITE_TOKEN is set — needed on Vercel, where REPORTS_DIR
+# is a per-instance /tmp. Otherwise the local REPORTS_DIR folder. Same layout: reports/<job_id>/<file>.
+# Hobby quota: 1 GB, 2,000 uploads/listings and 10,000 reads per month → listings are cached 60 s per instance and
+# files (immutable once a job is finished) are cached in memory and in the browser.
+BLOB = bool(_os.environ.get("BLOB_STORE_ID") or _os.environ.get("BLOB_READ_WRITE_TOKEN"))
+CASE_FILES = {"output.json", "features_combined.json", "metrics.json", "validation.json", "output.invalid.json"}
+_TYPES = {".json": "application/json", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png"}
+_CASES_CACHE: dict = {"t": 0.0, "ids": []}
+_FILE_CACHE: dict[str, bytes] = {}
+CODE_COOKIE = "axa_access"
+
+
+def _store_job(job_id: str, out: Path) -> None:
+    """Uploads a finished job's files (report, evidence, metrics, images) to the private Blob store. Never fails the job."""
+    if not BLOB:
+        return
+    from vercel.blob import sync as blob
+    for p in sorted(out.rglob("*")):
+        rel = p.relative_to(out).as_posix()
+        if p.is_file() and (rel in CASE_FILES or rel.startswith("images/")):
+            try:
+                blob.put_blob(f"reports/{job_id}/{rel}", p.read_bytes(), access="private", allow_overwrite=True,
+                              content_type=_TYPES.get(p.suffix.lower(), "application/octet-stream"))
+            except Exception:  # noqa: BLE001
+                logging.getLogger(__name__).exception("Blob upload failed for %s/%s", job_id, rel)
+    _CASES_CACHE["t"] = 0.0
+
+
+def _case_access(x_access_code: str | None, request: Request) -> None:
+    require_access_code(x_access_code or request.cookies.get(CODE_COOKIE))
+
+
+@app.get("/api/cases")
+def list_cases(request: Request, response: Response, x_access_code: str | None = Header(None)) -> list[str]:
+    """Report folders available to the underwriter dashboard (newest first). Header X-Access-Code or the cookie set
+    here (so that <img> requests for case photos are authorised too)."""
+    _case_access(x_access_code, request)
+    if x_access_code:
+        response.set_cookie(CODE_COOKIE, x_access_code, httponly=True, secure=config.ON_VERCEL, samesite="strict",
+                            max_age=30 * 24 * 3600, path="/api/cases")
+    if _time.monotonic() - _CASES_CACHE["t"] > 60:
+        if BLOB:
+            from vercel.blob import sync as blob
+            ids = [e.prefix.rstrip("/").split("/")[-1] for e in blob.query_blob_entries(prefix="reports/")
+                   if isinstance(e, blob.BlobPrefix)]
+        else:
+            ids = [d.name for d in REPORTS_DIR.iterdir() if d.is_dir()] if REPORTS_DIR.exists() else []
+        _CASES_CACHE.update(t=_time.monotonic(), ids=sorted(ids, key=lambda i: i.split("-")[-3:-1], reverse=True))
+    return _CASES_CACHE["ids"]
+
+
+@app.get("/api/cases/{case_id}/files/{path:path}")
+def case_file(case_id: str, path: str, request: Request, x_access_code: str | None = Header(None)) -> Response:
+    """One file of a case (output.json, features_combined.json, metrics.json, validation.json, images/…)."""
+    _case_access(x_access_code, request)
+    if not _re.fullmatch(r"[a-z0-9-]{3,80}", case_id) or not (path in CASE_FILES or _re.fullmatch(r"images/[\w.-]+", path)):
+        raise HTTPException(404)
+    key = f"reports/{case_id}/{path}"
+    data = _FILE_CACHE.get(key)
+    if data is None:
+        if BLOB:
+            from vercel.blob import sync as blob
+            try:
+                data = blob.get_blob(key, access="private").body
+            except blob.BlobNotFoundError:
+                raise HTTPException(404) from None
+        else:
+            f = REPORTS_DIR / case_id / path
+            if not f.is_file():
+                raise HTTPException(404)
+            data = f.read_bytes()
+        if len(_FILE_CACHE) < 500:
+            _FILE_CACHE[key] = data
+    return Response(data, media_type=_TYPES.get(Path(path).suffix.lower(), "application/octet-stream"),
+                    headers={"Cache-Control": "private, max-age=3600"})
+
 
 if __name__ == "__main__":
     print("Run with: uvicorn src.main:app --reload")
