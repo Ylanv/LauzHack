@@ -86,7 +86,7 @@ export default function App() {
     setTimeout(() => { setFade(true); setTimeout(finish, 650) }, 900)
   }, [finish])
 
-  const start = (i: RequestInput, c: Coords, accessCode: string, activityLabel: string) => {
+  const start = (i: RequestInput, c: Coords, activityLabel: string) => {
     coords.current = c; setServerError(null)
     setInput(i); setScreen("proc"); setMood("working"); setStepState({}); setCurrent("Starting"); setFade(false); setHeld(false)
     setActivity(activityLabel); setProgress(null)
@@ -107,7 +107,7 @@ export default function App() {
         r.etlDone = p.done_stages.includes("etl")
       }
       // progress is streamed while the backend works (POST /api/reports/stream); the last line carries the final status
-      streamReport(i, accessCode, onProgress).then((p) => {
+      streamReport(i, onProgress).then((p) => {
         if (run.current !== r) return
         if (p.status === "succeeded") { r.done = true; finish() }
         else fail(progressError(p))
@@ -121,7 +121,7 @@ export default function App() {
     if (!new URLSearchParams(location.search).has("autorun")) return
     getIndustries().catch(() => []).then((list) => {
       const label = list.find((x) => x.key === MOCK.sample.industry)?.label ?? MOCK.sample.industry
-      if (screenRef.current === "form" && !run.current) start({ ...MOCK.sample }, { ...MOCK.coords }, "", label)
+      if (screenRef.current === "form" && !run.current) start({ ...MOCK.sample }, { ...MOCK.coords }, label)
     })
   }, []) // eslint-disable-line
 
@@ -192,7 +192,7 @@ export default function App() {
   const demoLabel = () => DEMO_INDUSTRIES.find((x) => x.key === MOCK.sample.industry)?.label ?? MOCK.sample.industry
   const demo = {
     form: () => { run.current = null; setFade(false); again() },
-    waiting: () => { run.current = null; start({ ...MOCK.sample }, { ...MOCK.coords }, "", demoLabel()) },
+    waiting: () => { run.current = null; start({ ...MOCK.sample }, { ...MOCK.coords }, demoLabel()) },
     confirmation: () => { run.current = null; setInput({ ...MOCK.sample }); setActivity(demoLabel()); setFade(false); setHeld(false); finish() },
     error: () => {
       run.current = null; setFade(false)

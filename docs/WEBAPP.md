@@ -46,7 +46,6 @@ uv venv .venv && uv pip install --python .venv/bin/python -r requirements.txt uv
 | Company legal name | `company_legal_name` | Required, exactly as in the commercial register |
 | Address of the business premises | `address` (`"Street N, NPA Town"`) | Must be **picked in the geo.admin.ch list**: a town alone or a free-typed text is refused. Outside the canton of Geneva it is flagged right away and refused, using the canton lookup in `lib/canton.ts`. The card subtitle states the scope |
 | Main activity of the business | `industry_type` | Required drop-down filled by `GET /api/industries`, showing the label and sending the key. It is never inferred. If the list fails to load, a "Load again" link appears |
-| Access code | header `X-Access-Code` | Shown only when `GET /api/health` says `access_code_required`, or after a 401. It is never stored in the bundle |
 
 "Fill with the demo case" fills in Marie Dupont, CMDS SA, Rue du Champ-Blanchod 7, 1228 Plan-les-Ouates, with metalworking preselected.
 
@@ -58,7 +57,6 @@ uv venv .venv && uv pip install --python .venv/bin/python -r requirements.txt uv
   - The confirmation screen ("Your request has been sent") appears **only when the report is valid** and stored in `reports/<job_id>/` for the team (see the dashboard).
 - The job folder is the case read by the underwriter dashboard. In team review ("Pause at end"), "Open report" opens it there.
 - Errors bring the client back to the form **with every value kept**, and a message in a banner. There are no automatic retries.
-  - **401:** access code missing or wrong.
   - **422** or ETL "input rejected": the backend's message is shown (for example: no company registered under that exact name).
   - **Public service down, invalid report, connection lost:** a "Try again" button sends the same values once more.
 - Locally without an LLM key: start the backend with `REPORT_MODEL=mock` (free, minimal report). The background job needs a long-running server: it is not meant for Vercel's serverless functions.

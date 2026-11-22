@@ -1,13 +1,13 @@
 import { useEffect, useRef, useState } from "react"
 import { norm, searchAddress, coordsFor, exactCanton, type AddressHit } from "../lib/address"
 import { MOCK } from "../pipeline/mock"
-import { DEMO, getIndustries, accessCodeRequired, type Industry, type AssessErrorKind } from "../pipeline"
+import { DEMO, getIndustries, type Industry, type AssessErrorKind } from "../pipeline"
 import type { Coords, RequestInput } from "../pipeline/types"
 
-type Key = "contact" | "company" | "address" | "industry" | "code"
+type Key = "contact" | "company" | "address" | "industry"
 export interface ServerError { kind: AssessErrorKind; message: string }
 interface Props {
-  onSubmit: (i: RequestInput, c: Coords, accessCode: string, activity: string) => void
+  onSubmit: (i: RequestInput, c: Coords, activity: string) => void
   say: (t: string, mood?: "puzzled" | "happy") => void
   /** values of the previous attempt: kept after an error */
   initial?: { input: RequestInput; coords: Coords; picked: string } | null
@@ -15,11 +15,10 @@ interface Props {
 }
 
 const GE = 25   // canton of Geneva: the only scope of the assessment for now
-const HINTS: Record<Key, string> = { contact: "Who should we get back to?", company: "Exactly as in the commercial register.", address: "Pick the address in the list.", industry: "What does the business mainly do?", code: "Your team gave you this code." }
+const HINTS: Record<Key, string> = { contact: "Who should we get back to?", company: "Exactly as in the commercial register.", address: "Pick the address in the list.", industry: "What does the business mainly do?" }
 
 export default function FormScreen({ onSubmit, say, initial, serverError }: Props) {
   const [v, setV] = useState<RequestInput>(initial?.input ?? { contact: "", company: "", address: "", industry: "" })
-  const [code, setCode] = useState("")
   const [err, setErr] = useState<Partial<Record<Key, string>>>({})
   const [items, setItems] = useState<AddressHit[]>([])
   const [addressFailed, setAddressFailed] = useState(false)
@@ -27,18 +26,16 @@ export default function FormScreen({ onSubmit, say, initial, serverError }: Prop
   const [idx, setIdx] = useState(-1)
   const [inds, setInds] = useState<Industry[] | null>(null)
   const [indsFailed, setIndsFailed] = useState(false)
-  const [needCode, setNeedCode] = useState(!DEMO || serverError?.kind === "code")
   const coords = useRef<Coords | null>(initial?.coords ?? null)
   const picked = useRef<string>(initial?.picked ?? "")   // the address text chosen from the list (a free-typed text is not accepted)
   const seq = useRef(0)
   const timer = useRef<number>()
-  const refs = { contact: useRef<HTMLInputElement>(null), company: useRef<HTMLInputElement>(null), address: useRef<HTMLInputElement>(null), industry: useRef<HTMLSelectElement>(null), code: useRef<HTMLInputElement>(null) }
+  const refs = { contact: useRef<HTMLInputElement>(null), company: useRef<HTMLInputElement>(null), address: useRef<HTMLInputElement>(null), industry: useRef<HTMLSelectElement>(null) }
 
   const loadIndustries = () => { setIndsFailed(false); getIndustries().then(setInds).catch(() => setIndsFailed(true)) }
   useEffect(() => {
     loadIndustries()
-    accessCodeRequired().then((x) => setNeedCode((p) => p || x)).catch(() => { /* unknown: the server answers 401 if a code is needed */ })
-    const k: Key = serverError?.kind === "code" ? "code" : serverError?.kind === "input" ? "address" : "contact"
+    const k: Key = serverError?.kind === "input" ? "address" : "contact"
     setTimeout(() => refs[k].current?.focus({ preventScroll: true }), 0)
   }, []) // eslint-disable-line
 
@@ -88,10 +85,9 @@ export default function FormScreen({ onSubmit, say, initial, serverError }: Prop
         : !picked.current || picked.current !== t.address || !coords.current ? "Choose the exact address (street, number, postcode, town) in the list."
         : outOfScope(coords.current) ? "We can only assess buildings in the canton of Geneva for now." : "",
       industry: t.industry ? "" : "Please choose the main activity of the business.",
-      code: needCode && !code.trim() ? "Please enter the access code." : "",
     }
     setErr(e)
-    const first = (["contact", "company", "address", "industry", "code"] as Key[]).find((k) => e[k])
+    const first = (["contact", "company", "address", "industry"] as Key[]).find((k) => e[k])
     if (first) { refs[first].current?.focus(); say("Check the highlighted field.", "puzzled") }
     return !first
   }
@@ -99,7 +95,7 @@ export default function FormScreen({ onSubmit, say, initial, serverError }: Prop
     ev?.preventDefault()
     const t = { contact: v.contact.trim(), company: v.company.trim(), address: v.address.trim(), industry: v.industry }
     setV(t)
-    if (validate(t)) onSubmit(t, coords.current!, code.trim(), inds?.find((x) => x.key === t.industry)?.label ?? t.industry)
+    if (validate(t)) onSubmit(t, coords.current!, inds?.find((x) => x.key === t.industry)?.label ?? t.industry)
   }
   const demo = () => {
     setV({ ...MOCK.sample }); setErr({})
@@ -164,19 +160,11 @@ export default function FormScreen({ onSubmit, say, initial, serverError }: Prop
           {indsFailed && <button type="button" className="link small" onClick={loadIndustries}>Load the activities again</button>}
           <span className="ferr" id="e-industry">{err.industry}</span>
         </div>
-        {needCode && (
-          <div className={"fld" + (err.code ? " bad" : "")} id="f-code">
-            <label htmlFor="code">Access code</label>
-            <input id="code" ref={refs.code} type="password" value={code} autoComplete="off" aria-invalid={!!err.code} aria-describedby="e-code"
-              onChange={(e) => { setCode(e.target.value); setErr((p) => ({ ...p, code: "" })) }} onFocus={() => say(HINTS.code)} />
-            <span className="ferr" id="e-code">{err.code}</span>
-          </div>
-        )}
         {DEMO && <p className="desc">Demo mode: nothing is sent, the assessment is simulated.</p>}
       </div>
       <footer className="card-f">
         <button className="btn outline" type="button" onClick={demo}>Fill with the demo case</button>
-        <button className="btn" type="submit" disabled={needCode && !code.trim()}>{needCode ? "Start assessment" : "Send request"}</button>
+        <button className="btn" type="submit">Send request</button>
       </footer>
       </form>
     </section>
