@@ -1,5 +1,6 @@
 <p align="center">
-  <img src="docs/assets/axolotl.png" alt="AXAlotl mascot" width="220">
+  <img width="192" height="128" alt="image" src="https://github.com/user-attachments/assets/5a06cb94-d444-4404-b5ea-72b5b4ab5665" />
+
 </p>
 
 <h1 align="center">AXAlotl</h1>
@@ -8,43 +9,25 @@
 
 <p align="center">
   <a href="https://lauz-hack-webapp.vercel.app">Web app</a> ·
-  <a href="https://lauz-hack-webapp.vercel.app/dashboard.html">Underwriter dashboard</a> ·
-  <a href="https://lauz-hack.vercel.app">API</a>
-  <br><sub>LauzHack 2026 · AXA B2B challenge: <i>frugal use of multimodal AI</i></sub>
+  <a href="https://lauz-hack-webapp.vercel.app/dashboard.html">Dashboard</a>
+  <br><sub>LauzHack 2026 · AXA challenge: <i>frugal use of multimodal AI</i></sub>
 </p>
 
 ---
 
 ## The problem and our solution
 
-Small and medium-sized enterprises (SMEs) want to insure the commercial buildings they operate from: workshops, production sites, warehouses. To quote a **premium** and decide on the cover, the insurer has to assess the **risk** of that specific building. That means a long list of risk factors, from the building's construction and condition (COPE: *Construction, Occupancy, Protection, Exposure*) to the industrial activity inside it and its exposure to natural hazards.
+Small and medium-sized enterprises (SMEs) want to insure the commercial buildings they operate from: workshops, production sites, warehouses. To quote a **premium** and decide on the cover, the insurer has to assess the **risk** of that specific building. That means a long list of risk factors, from the building's [construction and condition (COPE: *Construction, Occupancy, Protection, Exposure*](investopedia.com/terms/c/cope-insurance.asp?__cf_chl_tk=hz4_DUNBE1L9czYsP2opy3UrNBAQvfsNnPwq0RrBvwk-1795336125-1.0.1.1-3yPp6znRdMNlM6g3x5Fhwkj2rj0KFghG06jJ377IU4I) to the industrial activity inside it and its exposure to natural hazards.
 
-Today an underwriter collects these factors by hand from registers, maps, aerial imagery and the company's website. It takes hours per building and is costly.
+Today an [underwriter collects these factors by hand from registers, maps, aerial imagery and the company's website](https://www.investopedia.com/terms/i/insurance-underwriter.asp). It takes hours per building and is costly.
 
 **AXAlotl automates most of this research.** From three inputs (client name, company name, building address), it:
 
-1. collects the risk factors from official Swiss and Geneva sources;
-2. reads the images (aerial photo, facade, website photos) with a small vision model;
-3. writes a standardized underwriting report. Every statement in the report is linked to its evidence, and the report says clearly what is **verified**, what is **inferred** and what is still **unknown** (those become questions for the client).
+1. [collects the risk factors from official Swiss and Geneva sources](#data-extraction)
+2. [reads the images (aerial photo, facade, website photos) with a small vision model](#what-the-vision-model-does-and-why)
+3. [writes a standardized underwriting report.](#report-generation) Every statement in the report is linked to its evidence, and the report says clearly what is **verified**, what is **inferred** and what is still **unknown** (those become questions for the client).
 
-A job that took an underwriter hours now runs **in under a minute for a few cents**. Measured on two real Geneva companies, end to end: **34 s / $0.015** and **47 s / $0.033**.
-
-```mermaid
-flowchart LR
-    IN["Client request<br/>name · company · address"]:::input --> ETL
-    subgraph ETL["Data extraction (0 tokens except images)"]
-      REG["Registers & geodata<br/>Zefix · RegBL · SITG · FOEN · MeteoSwiss"]:::py
-      VLM["Vision model<br/>orthophoto · facade · website"]:::llm
-    end
-    ETL --> FEAT["19 risk features<br/>+ sources + status"]:::py --> BUNDLE["Evidence bundle<br/>stable IDs, no LLM"]:::py
-    BUNDLE --> LLM["Report model<br/>1 call, strict JSON schema"]:::llm --> VAL{"Validation<br/>schema · IDs · rules"}:::py
-    VAL -- valid --> OUT["output.json<br/>→ dashboard"]:::output
-    VAL -- invalid --> REP["1 bounded repair"]:::llm --> VAL
-    classDef input fill:#e8eefc,stroke:#3b5bdb,color:#1b2b6b
-    classDef py fill:#e7f3eb,stroke:#2f9e44,color:#165c39
-    classDef llm fill:#fdf0d5,stroke:#e67700,color:#805213
-    classDef output fill:#f3e8fc,stroke:#7048e8,color:#3b1f7a
-```
+A job that took an underwriter hours now runs **in under a minute for a few cents**. Measured on 50 real Geneva companies, end to end on two examples: **34 s / $0.015** and **47 s / $0.033**.
 
 ---
 
@@ -103,7 +86,7 @@ The pipeline also identifies the company and the building: Zefix UID, register s
 
 ### What the vision model does, and why
 
-Some risk factors exist only in images, so we use a **small, cheap vision-language model** (`google/gemini-2.5-flash-lite` via OpenRouter, set by `MODEL_VISION`) for exactly three calls per building:
+Some risk factors exist only in images, so we use a **small, cheap vision-language model** (`google/gemini-2.5-flash-lite`) for exactly three calls per building:
 
 | Call | Image | What it returns (strict JSON schema) |
 |---|---|---|
@@ -151,17 +134,6 @@ Some risk factors exist only in images, so we use a **small, cheap vision-langua
 Same 10 evidence bundles (2 real Geneva cases, 8 synthetic) for every model, with the production prompt, schema and validator. Time = wall clock until a valid `output.json`, repairs included.
 
 <p align="center"><img src="docs/assets/report_model_benchmark.png" alt="Speed vs cost per model" width="820"></p>
-
-| Model | Avg time | $/report | Valid (first try) | Quality* | Critical errors* |
-|---|---|---|---|---|---|
-| **Gemini 3.5 Flash-Lite** (default) | **9.2 s** | **$0.012** | 10/10 (10) | 0.864 | 5 / 8 |
-| gpt-oss-120b, low reasoning | 11.1 s | $0.004 | 10/10 (9) | 0.870 | 3 / 8 |
-| Gemini 3.5 Flash, minimal reasoning | 16.8 s | $0.044 | 10/10 (10) | 0.907 | 1 / 8 |
-| Gemini 3.8 Flash, minimal reasoning | 24.9 s | $0.019 | 10/10 (10) | 0.930 | 4 / 8 |
-| Claude Opus 5.5, low effort | 45.4 s | $0.167 | 10/10 (10) | 0.932 | 3 / 8 |
-| Claude Opus 5.5, medium effort | 82.2 s | $0.261 | 10/10 (9) | 0.939 | 3 / 8 |
-
-\* Automatic score against ground truth on the 8 synthetic cases (0–1), by a keyword-based checker. Indicative only, not a ranking. Reasoning effort was the main speed lever: it cut output tokens by up to 3–4×. Excluded after a first screening round: GPT-5.4 mini (provider rejects the schema), Qwen 3.5 Flash (invalid JSON), Mistral Small (slow), DeepSeek V4.1 Flash (always needed a repair).
 
 An independent LLM judge (GPT-6.1 Terra, 15 synthetic validation cases, 1–5 scale) rated factual grounding highest for Opus (3.9) and lowest for Gemini 3.5 Flash (2.2). The default (Flash-Lite) favours speed and cost; the report prompt was later tuned for it. The model is one setting (`REPORT_MODEL`, configs in `models/configs.json`).
 
