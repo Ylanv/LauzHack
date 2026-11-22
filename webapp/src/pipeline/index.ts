@@ -1,8 +1,9 @@
 import type { RequestInput } from "./types"
 import { DEMO_INDUSTRIES } from "./mock"
 
-/** Explicit demo flow (?demo, or ?autorun without &live): fully simulated, no backend call. Every other submission is live. */
-export const DEMO = typeof location !== "undefined" && (/[?&]demo\b/.test(location.search) || (/[?&]autorun\b/.test(location.search) && !/[?&]live\b/.test(location.search)))
+/** Explicit demo flow (/demo.html, ?demo, or ?autorun without &live): fully simulated, no backend call, no access code,
+ *  no API key. Every other submission is live. */
+export const DEMO = typeof location !== "undefined" && (/\/demo(\.html)?$/.test(location.pathname) || /[?&]demo\b/.test(location.search) || (/[?&]autorun\b/.test(location.search) && !/[?&]live\b/.test(location.search)))
 
 export interface Industry { key: string; label: string }
 

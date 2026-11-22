@@ -185,3 +185,12 @@ body{background:var(--canvas)}
 .jr-sort:focus-visible{outline:2px solid var(--brand);outline-offset:2px;border-radius:3px}
 .jr-date{white-space:nowrap;font-size:13px}
 .jr-main>.jr-h1:first-child{margin-top:6px}
+/* the companion on the ticket desk */
+.jr-buddy{position:fixed;right:14px;bottom:8px;width:150px;height:150px;z-index:40;pointer-events:none}
+.jr-buddy__mascot{width:100%;height:100%;filter:drop-shadow(0 0 1px #fff) drop-shadow(0 8px 14px rgba(28,34,80,.18))}
+.jr-buddy__bubble{position:absolute;right:100%;bottom:62%;width:max-content;max-width:240px;background:#fff;border:1px solid var(--line);border-radius:14px 14px 4px 14px;padding:8px 12px;font-size:13px;font-weight:500;color:var(--ink);box-shadow:0 10px 24px -12px rgba(28,34,80,.35);opacity:0;transform:translateY(6px);transition:opacity .2s,transform .2s}
+.jr-buddy__bubble.show{opacity:1;transform:none}
+@media (prefers-reduced-motion:reduce){.jr-buddy__bubble{transition:none}}
+.jr-main{padding-bottom:170px}
+.jr-buddy{width:180px;height:180px;right:8px;bottom:0}
+.jr-main{padding-bottom:200px}

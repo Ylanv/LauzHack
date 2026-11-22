@@ -8,7 +8,7 @@ type Key = "contact" | "company" | "address" | "industry" | "code"
 export interface ServerError { kind: AssessErrorKind; message: string }
 interface Props {
   onSubmit: (i: RequestInput, c: Coords, accessCode: string, activity: string) => void
-  say: (t: string, mood?: "puzzled") => void
+  say: (t: string, mood?: "puzzled" | "happy") => void
   /** values of the previous attempt: kept after an error */
   initial?: { input: RequestInput; coords: Coords; picked: string } | null
   serverError?: ServerError | null
@@ -64,7 +64,7 @@ export default function FormScreen({ onSubmit, say, initial, serverError }: Prop
     set("address", x.text); setOpen(false)
     coords.current = coordsFor(x); picked.current = x.text
     if (outOfScope(coords.current)) { setErr((p) => ({ ...p, address: `This building is in ${coords.current!.label}. We can only assess buildings in the canton of Geneva for now.` })); say("That one is outside Geneva.", "puzzled") }
-    else say("Found it. We will fly there.")
+    else say("Found it. We will fly there.", "happy")
   }
   const onKey = (e: React.KeyboardEvent) => {
     const n = items.length
@@ -98,7 +98,7 @@ export default function FormScreen({ onSubmit, say, initial, serverError }: Prop
   const demo = () => {
     setV({ ...MOCK.sample }); setErr({})
     coords.current = { ...MOCK.coords }; picked.current = MOCK.sample.address
-    say("Demo case filled in.")
+    say("Demo case filled in.", "happy")
   }
 
   const field = (k: "contact" | "company", label: string, ph: string, ac: string, help?: string) => (

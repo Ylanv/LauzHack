@@ -38,5 +38,5 @@ function reports(): Plugin {
 export default defineConfig({
   plugins: [react(), reports()],
   server: { proxy: { "/api": process.env.LAUZHACK_API_URL || "http://127.0.0.1:8000" } },
-  build: { rollupOptions: { input: { app: resolve(__dirname, "index.html"), dashboard: resolve(__dirname, "dashboard.html") } } },
+  build: { rollupOptions: { input: { app: resolve(__dirname, "index.html"), demo: resolve(__dirname, "demo.html"), dashboard: resolve(__dirname, "dashboard.html") } } },
 })
