@@ -9,6 +9,7 @@ The cube axolotl from `axolotl-cube.zip`, recoloured in AXA colours and animated
 | `assets/axolotl-axa.gltf` | Model used by the app: same geometry, AXA texture embedded (9 KB) |
 | `assets/axolotl-axa-atlas.png` | The same texture, for review |
 | `palette.json` | All mascot colours |
+| `assets/logo/` | Square logo: `axolotl-logo.svg`, plus PNGs at 16, 32, 64, 180 (Apple touch icon) and 512 px |
 | `../../scripts/build_axolotl.py` | Rebuilds `axolotl-axa.gltf` from the source and `palette.json` |
 | `AxolotlMascot.tsx` | React component (transparent canvas that fills its parent) |
 | `AxolotlModel.ts` | three.js scene: loads the model, pivot groups, face overlay, contact shadow |
